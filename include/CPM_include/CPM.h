@@ -12,3 +12,10 @@ Copyright (C) 2016 Yinlin.Hu
 
 Usages:
 
+The program "cpm.exe" has been built and tested on Windows 7.
+
+USAGE: cpm.exe img1Name img2Name outMatchName
+
+Explanations:
+
+The
