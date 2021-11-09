@@ -18,4 +18,7 @@ USAGE: cpm.exe img1Name img2Name outMatchName
 
 Explanations:
 
-The
+The output of the program is a text file, which is in the format of "x1,y1,x2,y2"
+corresponding to one match per line.
+
+*
