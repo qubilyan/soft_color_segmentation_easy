@@ -21,4 +21,17 @@ Explanations:
 The output of the program is a text file, which is in the format of "x1,y1,x2,y2"
 corresponding to one match per line.
 
-*
+*/
+
+#ifndef _CPM_H_
+#define _CPM_H_
+
+#include "ImagePyramid.h"
+
+class CPM
+{
+public:
+	CPM();
+	~CPM();
+
+	int Matching(FImage& img1, FImage& img2, FImage& ou
