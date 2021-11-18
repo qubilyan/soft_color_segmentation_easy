@@ -34,4 +34,10 @@ public:
 	CPM();
 	~CPM();
 
-	int Matching(FImage& img1, FImage& img2, FImage& ou
+	int Matching(FImage& img1, FImage& img2, FImage& outMatches);
+	void SetStereoFlag(int needStereo);
+	void SetStep(int step);
+
+private:
+	void imDaisy(FImage& img, UCImage& outFtImg);
+	void CrossCheck(IntIma
