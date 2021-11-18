@@ -40,4 +40,5 @@ public:
 
 private:
 	void imDaisy(FImage& img, UCImage& outFtImg);
-	void CrossCheck(IntIma
+	void CrossCheck(IntImage& seeds, FImage& seedsFlow, FImage& seedsFlow2, IntImage& kLabel2, int* valid, float th);
+	float MatchCost(FImage& img1, FImage& img2, UCImag
