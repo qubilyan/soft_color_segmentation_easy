@@ -44,4 +44,4 @@ private:
 	float MatchCost(FImage& img1, FImage& img2, UCImage* im1f, UCImage* im2f, int x1, int y1, int x2, int y2);
 
 	// a good initialization is already stored in bestU & bestV
-	int Propogate(FImagePyramid& pyd1, FImagePy
+	int Propogate(FImagePyramid& pyd1, FImagePyramid& pyd2, UCImage* pyd1f, UCImage* pyd2f, int level, float* radius, int iterCnt, IntImage* pydSeeds, IntImage& neighbors, FImage* pydSeeds
