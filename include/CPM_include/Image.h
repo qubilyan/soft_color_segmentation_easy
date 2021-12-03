@@ -385,3 +385,137 @@ public:
 
 	template <class T1,class T2>
 	void warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& imdx,const Image<T1>& imdy, const Image<T1>& imdxdy,const Image<T2>& vx,const Image<T2>& vy) const;
+
+	template <class T1>
+	void warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const;
+
+	template <class T1,class T2>
+	void warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& coeff,const Image<T2>& vx,const Image<T2>& vy) const;
+
+	template <class T1>
+	void warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& flow) const;
+
+	template <class T1>
+	void DissembleFlow(Image<T1>& vx,Image<T1>& vy) const;
+	// function for image warping
+	template <class T1>
+	void warpImage(Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const;
+
+	// function for image warping transpose
+	template <class T1>
+	void warpImage_transpose(Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const;
+
+	// function for image warping
+	template <class T1>
+	void warpImage(Image<T>& output,const Image<T1>& flow) const;
+
+	// function for image warping transpose
+	template <class T1>
+	void warpImage_transpose(Image<T>& output,const Image<T1>& flow) const;
+
+	// function to get the max
+	T maximum() const;
+
+	// function to get min
+	T minimum() const;
+
+	void generate2DGuasisan(int winsize,float sigma)
+	{
+		clear();
+		imWidth = imHeight = winsize*2+1;
+		nChannels = 1;
+		computeDimension();
+		ImageProcessing::generate2DGaussian(pData,winsize,sigma);
+	}
+	void generate1DGaussian(int winsize,float sigma)
+	{
+		clear();
+		imWidth = winsize*2+1;
+		imHeight = 1;
+		nChannels = 1;
+		computeDimension();
+		ImageProcessing::generate1DGaussian(pData,winsize,sigma);
+	}
+	template <class T1>
+	void subSampleKernelBy2(Image<T1>& output) const
+	{
+		int winsize = (imWidth-1)/2;
+		int winsize_s  = winsize/2;
+		int winlen_s = winsize_s*2+1;
+		if(!output.matchDimension(winlen_s,1,1))
+			output.allocate(winlen_s,1,1);
+		output.pData[winsize_s] = pData[winsize];
+		for(int i = 0;i<winsize_s;i++)
+		{
+			output.pData[winsize_s+1+i] = pData[winsize+2+2*i];
+			output.pData[winsize_s-1-i] = pData[winsize-2-2*i];
+		}
+		output.Multiplywith(1/output.sum());
+	}
+	void addAWGN(float noiseLevel = 0.05)
+	{
+		for(int i = 0;i<nElements;i++)
+			pData[i] += CStochastic::GaussianSampling()*noiseLevel;
+	}
+
+	// file IO
+#ifndef _MATLAB
+	//bool writeImage(QFile& file) const;
+	//bool readImage(QFile& file);
+	//bool writeImage(const QString& filename) const;
+	//bool readImage(const QString& filename);
+#endif
+
+#ifdef _MATLAB
+	bool LoadMatlabImage(const mxArray* image,bool IsImageScaleCovnersion=true);
+	template <class T1>
+	void LoadMatlabImageCore(const mxArray* image,bool IsImageScaleCovnersion=true);
+
+	template <class T1>
+	void ConvertFromMatlab(const T1* pMatlabPlane,int _width,int _height,int _nchannels);
+
+	void OutputToMatlab(mxArray*& matrix) const;
+
+	template <class T1>
+	void ConvertToMatlab(T1* pMatlabPlane) const;
+#endif
+};
+
+typedef Image<unsigned char> BiImage;
+typedef Image<unsigned char> UCImage;
+typedef Image<int> IntImage;
+typedef Image<float> FImage;
+typedef Image<double> DImage;
+
+//------------------------------------------------------------------------------------------
+// constructor
+//------------------------------------------------------------------------------------------
+template <class T>
+Image<T>::Image()
+{
+	pData=NULL;
+	imWidth=imHeight=nChannels=nPixels=nElements=0;
+	IsDerivativeImage=false;
+	colorType = DATA;
+}
+
+//------------------------------------------------------------------------------------------
+// constructor with specified dimensions
+//------------------------------------------------------------------------------------------
+template <class T>
+Image<T>::Image(int width,int height,int nchannels)
+{
+	imWidth=width;
+	imHeight=height;
+	nChannels=nchannels;
+	computeDimension();
+	pData=NULL;
+	pData = (T*)xmalloc(nElements * sizeof(T));
+	if(nElements>0)
+		memset(pData,0,sizeof(T)*nElements);
+	IsDerivativeImage=false;
+	colorType = DATA;
+}
+
+template <class T>
+Image<T>::Image(const T& value,int _width,int _height,int _nchannels)
