@@ -76,4 +76,12 @@ private:
 	FImagePyramid _pyd2;
 
 	UCImage* _im1f;
-	UCImage* 
+	UCImage* _im2f;
+
+	FImage* _pydSeedsFlow;
+	FImage* _pydSeedsFlow2;
+
+	IntImage _seeds;
+	IntImage _seeds2;
+	IntImage _neighbors;
+	IntImage _neighbo
