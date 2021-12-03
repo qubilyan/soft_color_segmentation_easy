@@ -55,4 +55,6 @@ private:
 	};
 	double dist(Point a, Point b);
 	Point intersection(Point u1, Point u2, Point v1, Point v2);
-	Point
+	Point circumcenter(Point a, Point b, Point c);
+	// return the radius of the minimal circle
+	float MinimalCircle(float* x, float*y, int n, float* centerX = NU
