@@ -244,3 +244,144 @@ public:
 
 	// function to desaturating
 	template <class T1>
+	void desaturate(Image<T1>& image) const;
+
+	void desaturate();
+
+	template <class T1>
+	void collapse(Image<T1>& image,collapse_type type = collapse_average) const;
+
+	void collapse(collapse_type type = collapse_average);
+
+	void flip_horizontal(Image<T>& image);
+
+	void flip_horizontal();
+
+	// function to concatenate images
+	template <class T1,class T2>
+	void concatenate(Image<T1>& destImage,const Image<T2>& addImage) const;
+
+	template <class T1,class T2>
+	void concatenate(Image<T1>& destImage,const Image<T2>& addImage,float ratio) const;
+
+	template <class T1>
+	Image<T> concatenate(const Image<T1>& addImage) const;
+
+	// function to separate the channels of the image
+	template <class T1,class T2>
+	void separate(unsigned firstNChannels,Image<T1>& image1,Image<T2>& image2) const;
+
+	void AddBorder(Image<T>& outImg, int borderWidth) const;
+
+	// function to sample patch
+	template <class T1>
+	void getPatch(Image<T1>& patch,float x,float y,int fsize) const;
+
+	// function to crop the image
+	template <class T1>
+	void crop(Image<T1>& patch,int Left,int Top,int Width,int Height) const;
+
+	// basic numerics of images
+	template <class T1,class T2>
+	void Multiply(const Image<T1>& image1,const Image<T2>& image2);
+
+	template <class T1,class T2>
+	void MultiplyAcross(const Image<T1>& image1,const Image<T2>& image2);
+
+	template <class T1,class T2,class T3>
+	void Multiply(const Image<T1>& image1,const Image<T2>& image2,const Image<T3>& image3);
+
+	template <class T1>
+	void Multiplywith(const Image<T1>& image1);
+
+	template <class T1>
+	void MultiplywithAcross(const Image<T1>& image1);
+
+	void Multiplywith(float value);
+
+	template <class T1,class T2>
+	void Add(const Image<T1>& image1,const Image<T2>& image2);
+
+	template <class T1,class T2>
+	void Add(const Image<T1>& image1,const Image<T2>& image2,float ratio);
+
+	void Add(const T value);
+
+	template <class T1>
+	void Add(const Image<T1>& image1,const float ratio);
+
+	template <class T1>
+	void Add(const Image<T1>& image1);
+
+	template <class T1,class T2>
+	void Subtract(const Image<T1>& image1,const Image<T2>& image2);
+
+	void Subtract(const T value);
+
+	// arithmetic operators
+	void square();
+
+	// exp
+	void Exp(float sigma = 1);
+
+	// function to normalize an image
+	template <class T1>
+	void normalize(Image<T1>& image, float minV = -1, float maxV = -1) const;
+	void normalize(float minV = -1, float maxV = -1);
+
+	// function to threshold an image
+	void threshold(float minV = FLT_MIN, float maxV = FLT_MAX);
+
+	// function to compute the statistics of the image
+	float norm2() const;
+
+	float sum() const;
+
+	template <class T1>
+	float innerproduct(Image<T1>& image) const;
+
+	template <class T1>
+	void Integral(Image<T1>& image) const;
+
+	template <class T1>
+	void BoxFilter(Image<T1>& image, int r, bool norm = true) const;
+
+	// function to bilateral smooth flow field
+	template <class T1>
+	void BilateralFiltering(Image<T1>& other,int fsize,float filter_signa,float range_sigma) const;
+
+	// function to bilateral smooth an image
+	//Image<T> BilateralFiltering(int fsize,float filter_sigma,float range_sigma);
+	void imBilateralFiltering(Image<T>& result,int fsize,float filter_sigma,float range_sigma) const;
+
+	template <class T1,class T2>
+	int kmeansIndex(int pixelIndex,T1& minDistance,const T2* pDictionary,int nVocabulary, int nDim);
+
+	 // convert an image into visual words based on a dictionary
+	template <class T1,class T2>
+	void ConvertToVisualWords(Image<T1>& result,const T2* pDictionary,int nDim,int nVocabulary);
+	
+	// get the histogram of an image region
+	// the range is [0,imWidth] (x) and [0,imHeight] (y)
+	template <class T1>
+	Vector<T1> histogramRegion(int nBins,float left,float top,float right,float bottom) const;
+
+
+	// function for bicubic image interpolation
+	template <class T1>
+	inline void BicubicCoeff(float a[][4],const T* pIm,const T1* pImDx,const T1* pImDy,const T1* pImDxDy,const int offsets[][2]) const;
+
+	template <class T1,class T2>
+	void warpImageBicubic(Image<T>& output,const Image<T1>& imdx,const Image<T1>& imdy, const Image<T1>& imdxdy,const Image<T2>& vx,const Image<T2>& vy) const;
+
+	template <class T1>
+	void warpImageBicubic(Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const;
+
+	template <class T1>
+	void warpImageBicubicCoeff(Image<T1>& Coeff) const;
+
+	template <class T1,class T2>
+	void warpImageBicubic(Image<T>& output,const Image<T1>& coeff,const Image<T2>& vx,const Image<T2>& vy) const;
+
+	template <class T1,class T2>
+	void warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& imdx,const Image<T1>& imdy, const Image<T1>& imdxdy,const Image<T2>& vx,const Image<T2>& vy) const;
