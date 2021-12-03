@@ -84,4 +84,8 @@ private:
 	IntImage _seeds;
 	IntImage _seeds2;
 	IntImage _neighbors;
-	IntImage _neighbo
+	IntImage _neighbors2;
+
+};
+
+#endif // _CPM_H_
