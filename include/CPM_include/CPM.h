@@ -67,3 +67,13 @@ private:
 
 	int _isStereo;
 	int _maxDisplacement;
+	float _checkThreshold;
+	int _borderWidth;
+
+	IntImage _kLabels, _kLabels2;
+
+	FImagePyramid _pyd1;
+	FImagePyramid _pyd2;
+
+	UCImage* _im1f;
+	UCImage* 
