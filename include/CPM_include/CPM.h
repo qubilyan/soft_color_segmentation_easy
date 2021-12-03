@@ -57,4 +57,13 @@ private:
 	Point intersection(Point u1, Point u2, Point v1, Point v2);
 	Point circumcenter(Point a, Point b, Point c);
 	// return the radius of the minimal circle
-	float MinimalCircle(float* x, float*y, int n, float* centerX = NU
+	float MinimalCircle(float* x, float*y, int n, float* centerX = NULL, float* centerY = NULL);
+
+	//
+	int _step;
+	int _maxIters;
+	float _stopIterRatio;
+	float _pydRatio;
+
+	int _isStereo;
+	int _maxDisplacement;
