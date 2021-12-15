@@ -519,3 +519,140 @@ Image<T>::Image(int width,int height,int nchannels)
 
 template <class T>
 Image<T>::Image(const T& value,int _width,int _height,int _nchannels)
+{
+	pData=NULL;
+	allocate(_width,_height,_nchannels);
+	setValue(value);
+}
+
+#ifndef _MATLAB
+//template <class T>
+//Image<T>::Image(const QImage& image)
+//{
+//	pData=NULL;
+//	imread(image);
+//}
+#endif
+
+template <class T>
+void Image<T>::allocate(int width,int height,int nchannels)
+{
+	clear();
+	imWidth=width;
+	imHeight=height;
+	nChannels=nchannels;
+	computeDimension();
+	pData=NULL;
+	colorType = DATA;
+
+	if(nElements>0)
+	{
+		pData = (T*)xmalloc(nElements * sizeof(T));
+		memset(pData,0,sizeof(T)*nElements);
+	}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::allocate(const Image<T1> &other)
+{
+	allocate(other.width(),other.height(),other.nchannels());
+	IsDerivativeImage = other.isDerivativeImage();
+	colorType = other.colortype();
+}
+
+//------------------------------------------------------------------------------------------
+// copy constructor
+//------------------------------------------------------------------------------------------
+template <class T>
+Image<T>::Image(const Image<T>& other)
+{
+	imWidth=imHeight=nChannels=nElements=0;
+	pData=NULL;
+	copyData(other);
+}
+
+//------------------------------------------------------------------------------------------
+// destructor
+//------------------------------------------------------------------------------------------
+template <class T>
+Image<T>::~Image()
+{
+	if (pData != NULL){
+		xfree(pData);
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// clear the image
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::clear()
+{
+	if (pData != NULL){
+		xfree(pData);
+	}
+	pData=NULL;
+	imWidth=imHeight=nChannels=nPixels=nElements=0;
+}
+
+//------------------------------------------------------------------------------------------
+// reset the image (reset the buffer to zero)
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::reset()
+{
+	if(pData!=NULL)
+		memset(pData,0,sizeof(T)*nElements);
+}
+
+template <class T>
+void Image<T>::setValue(const T &value)
+{
+	for(int i=0;i<nElements;i++)
+		pData[i]=value;
+}
+
+template <class T>
+void Image<T>::setValue(const T& value,int _width,int _height,int _nchannels)
+{
+	if(imWidth!=_width || imHeight!=_height || nChannels!=_nchannels)
+		allocate(_width,_height,_nchannels);
+	setValue(value);
+}
+
+template <class T>
+void Image<T>::setPixel(int row, int col, T* valPtr)
+{
+	T* ptr = pixPtr(row, col);
+	memcpy(ptr, valPtr, sizeof(T)*nChannels);
+}
+
+//------------------------------------------------------------------------------------------
+// copy from other image
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::copyData(const Image<T>& other)
+{
+	imWidth=other.imWidth;
+	imHeight=other.imHeight;
+	nChannels=other.nChannels;
+	nPixels=other.nPixels;
+	IsDerivativeImage=other.IsDerivativeImage;
+	colorType = other.colorType;
+
+	if(nElements!=other.nElements)
+	{
+		nElements=other.nElements;	
+		if(pData!=NULL)
+			xfree(pData);
+		pData=NULL;
+		pData = (T*)xmalloc(nElements * sizeof(T));
+	}
+	if(nElements>0)
+		memcpy(pData,other.pData,sizeof(T)*nElements);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::copy(const Image<T1>& other)
