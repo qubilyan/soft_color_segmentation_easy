@@ -805,3 +805,148 @@ void Image<T>::imresize(Image<T1>& result, float ratio, InterType type/* = INTER
 }
 
 template <class T>
+template <class T1>
+void Image<T>::imresize(Image<T1>& result, int DstWidth, int DstHeight, InterType type/* = INTER_LINEAR*/) const
+{
+	if(result.width()!=DstWidth || result.height()!=DstHeight || result.nchannels()!=nChannels)
+		result.allocate(DstWidth,DstHeight,nChannels);
+	else
+		result.reset();
+	ImageProcessing::ResizeImage(pData,result.data(),imWidth,imHeight,nChannels,DstWidth,DstHeight,type);
+}
+
+
+template <class T>
+void Image<T>::imresize(int dstWidth, int dstHeight, InterType type/* = INTER_LINEAR*/)
+{
+	Image foo(dstWidth,dstHeight,nChannels); // kfj: it should be Image instead of FImage
+	ImageProcessing::ResizeImage(pData,foo.data(),imWidth,imHeight,nChannels,dstWidth,dstHeight,type);
+	copyData(foo);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::upSampleNN(Image<T1>& output,int ratio) const
+{
+	int width = imWidth*ratio;
+	int height = imHeight*ratio;
+	if(!output.matchDimension(width,height,nChannels))
+		output.allocate(width,height,nChannels);
+	for(int i =  0; i <imHeight; i++)
+		for(int j = 0; j<imWidth; j++)
+		{
+			int offset = (i*imWidth+j)*nChannels;
+			for(int ii = 0 ;ii<ratio;ii++)
+				for(int jj=0;jj<ratio;jj++)
+				{
+					int offset1 = ((i*ratio+ii)*width+j*ratio+jj)*nChannels;
+					for(int k = 0; k<nChannels; k++)
+						output.data()[offset1+k] = pData[offset+k];
+				}
+		}
+}
+
+//------------------------------------------------------------------------------------------
+// function of reading or writing images (uncompressed)
+//------------------------------------------------------------------------------------------
+template <class T>
+bool Image<T>::saveImage(const char *filename) const
+{
+	ofstream myfile(filename,ios::out | ios::binary);
+	if(myfile.is_open())
+	{
+		bool foo = saveImage(myfile);
+		myfile.close();
+		return foo;
+	}
+	else
+		return false;
+}
+
+template <class T>
+bool Image<T>::saveImage(ofstream& myfile) const
+{
+	char type[16];
+	sprintf(type,"%s",typeid(T).name());
+	myfile.write(type,16);
+	myfile.write((char *)&imWidth,sizeof(int));
+	myfile.write((char *)&imHeight,sizeof(int));
+	myfile.write((char *)&nChannels,sizeof(int));
+	myfile.write((char *)&IsDerivativeImage,sizeof(bool));
+	myfile.write((char *)pData,sizeof(T)*nElements);
+	return true;
+}
+
+template <class T>
+bool Image<T>::loadImage(const char *filename)
+{
+	ifstream myfile(filename, ios::in | ios::binary);
+	if(myfile.is_open())
+	{
+		bool foo = loadImage(myfile);
+		myfile.close();
+		return foo;
+	}
+	else
+		return false;
+}
+
+template <class T>
+bool Image<T>::loadImage(ifstream& myfile)
+{
+	char type[16];
+	myfile.read(type,16);
+
+	if(strcmpi(type,"uint16")==0)
+		sprintf(type,"unsigned short");
+	if(strcmpi(type,"uint32")==0)
+		sprintf(type,"unsigned int");
+	if(strcmpi(type,typeid(T).name())!=0)
+	{
+		cout<<"The type of the image is different from the type of the object!"<<endl;
+		return false;
+	}
+
+	int width,height,nchannels;
+	myfile.read((char *)&width,sizeof(int));
+	myfile.read((char *)&height,sizeof(int));
+	myfile.read((char *)&nchannels,sizeof(int));
+	if(!matchDimension(width,height,nchannels))
+		allocate(width,height,nchannels);
+	myfile.read((char *)&IsDerivativeImage,sizeof(bool));
+	myfile.read((char *)pData,sizeof(T)*nElements);
+	
+	return true;
+}
+
+//------------------------------------------------------------------------------------------
+// function to load the image
+//------------------------------------------------------------------------------------------
+#ifndef _MATLAB
+
+template <class T>
+bool Image<T>::imread(const char* filename)
+{
+	clear();
+	if(ImageIO::loadImage(filename,pData,imWidth,imHeight,nChannels))
+	{
+		computeDimension();
+		colorType = BGR; // when we use qt or opencv to load the image, it's often BGR
+		return true;
+	}
+	return false;
+}
+
+
+//template <class T>
+//bool Image<T>::imread(const QString &filename)
+//{
+//	clear();
+//	if(ImageIO::loadImage(filename,pData,imWidth,imHeight,nChannels))
+//	{
+//		computeDimension();
+//		return true;
+//	}
+//	return false;
+//}
+//
