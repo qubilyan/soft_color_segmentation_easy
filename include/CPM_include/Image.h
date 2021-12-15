@@ -656,3 +656,152 @@ void Image<T>::copyData(const Image<T>& other)
 template <class T>
 template <class T1>
 void Image<T>::copy(const Image<T1>& other)
+{
+	clear();
+
+	imWidth=other.width();
+	imHeight=other.height();
+	nChannels=other.nchannels();
+	computeDimension();
+
+	IsDerivativeImage=other.isDerivativeImage();
+	colorType = other.colortype();
+
+	pData=NULL;
+	pData = (T*)xmalloc(nElements * sizeof(T));
+	const T1*& srcData=other.data();
+	
+	// adjust the data according to the data type
+	bool isThisFloat = this->IsFloat();
+	bool isOtherFloat = other.IsFloat();
+	if (isThisFloat != isOtherFloat){
+		if (isThisFloat){
+			for (int i = 0; i < nElements; i++)
+				pData[i] = srcData[i] / 255.0;
+		}else{
+			for (int i = 0; i < nElements; i++)
+				pData[i] = srcData[i] * 255.0;
+		}
+	}else{
+		for (int i = 0; i < nElements; i++)
+			pData[i] = srcData[i];
+	}
+}
+
+template <class T>
+void Image<T>::im2float()
+{
+	if(IsFloat())
+		for(int i=0;i<nElements;i++)
+			pData[i]/=255;
+}
+
+//------------------------------------------------------------------------------------------
+// override equal operator
+//------------------------------------------------------------------------------------------
+template <class T>
+Image<T>& Image<T>::operator=(const Image<T>& other)
+{
+	copyData(other);
+	return *this;
+}
+
+template <class T>
+bool Image<T>::IsFloat() const
+{
+	if (typeid(T) == typeid(double) || typeid(T) == typeid(float))
+		return true;
+	else
+		return false;
+}
+
+template <class T>
+template <class T1>
+bool Image<T>::matchDimension(const Image<T1>& image) const
+{
+	if(imWidth==image.width() && imHeight==image.height() && nChannels==image.nchannels())
+		return true;
+	else
+		return false;
+}
+
+template <class T>
+bool Image<T>::matchDimension(int width, int height, int nchannels) const
+{
+	if(imWidth==width && imHeight==height && nChannels==nchannels)
+		return true;
+	else
+		return false;
+}
+
+//------------------------------------------------------------------------------------------
+// function to move this image to a dest image at (x,y) with specified width and height
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::moveto(Image<T1>& image,int x0,int y0,int width,int height)
+{
+	if(width==0)
+		width=imWidth;
+	if(height==0)
+		height=imHeight;
+	int NChannels=__min(nChannels,image.nchannels());
+
+	int x,y;
+	for(int i=0;i<height;i++)
+	{
+		y=y0+i;
+		if(y>=image.height())
+			break;
+		for(int j=0;j<width;j++)
+		{
+			x=x0+j;
+			if(x>=image.width())
+				break;
+			for(int k=0;k<NChannels;k++)
+				image.data()[(y*image.width()+x)*image.nchannels()+k]=pData[(i*imWidth+j)*nChannels+k];
+		}
+	}
+}
+
+
+//------------------------------------------------------------------------------------------
+// resize the image
+//------------------------------------------------------------------------------------------
+template <class T>
+bool Image<T>::imresize(float ratio, InterType type/* = INTER_LINEAR*/)
+{
+	if(pData==NULL)
+		return false;
+
+	T* pDstData;
+	int DstWidth,DstHeight;
+	DstWidth=(float)imWidth*ratio;
+	DstHeight=(float)imHeight*ratio;
+	pDstData = (T*)xmalloc(DstWidth*DstHeight*nChannels * sizeof(T));
+
+	ImageProcessing::ResizeImage(pData,pDstData,imWidth,imHeight,nChannels,ratio,type);
+
+	xfree(pData);
+	pData=pDstData;
+	imWidth=DstWidth;
+	imHeight=DstHeight;
+	computeDimension();
+	return true;
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imresize(Image<T1>& result, float ratio, InterType type/* = INTER_LINEAR*/) const
+{
+	int DstWidth,DstHeight;
+	DstWidth=(float)imWidth*ratio;
+	DstHeight=(float)imHeight*ratio;
+	if(result.width()!=DstWidth || result.height()!=DstHeight || result.nchannels()!=nChannels)
+		result.allocate(DstWidth,DstHeight,nChannels);
+	else
+		result.reset();
+	ImageProcessing::ResizeImage(pData,result.data(),imWidth,imHeight,nChannels,ratio,type);
+}
+
+template <class T>
