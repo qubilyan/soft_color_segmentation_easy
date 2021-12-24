@@ -950,3 +950,132 @@ bool Image<T>::imread(const char* filename)
 //	return false;
 //}
 //
+//template <class T>
+//void Image<T>::imread(const QImage& image)
+//{
+//	clear();
+//	ImageIO::loadImage(image,pData,imWidth,imHeight,nChannels);
+//	computeDimension();
+//}
+//
+ //------------------------------------------------------------------------------------------
+ // function to write the image 
+ //------------------------------------------------------------------------------------------
+template <class T>
+bool Image<T>::imwrite(const char* filename) const
+{
+	ImageIO::ImageType type;
+	if(IsDerivativeImage)
+		type=ImageIO::derivative;
+	else
+		type=ImageIO::standard;
+	return ImageIO::saveImage(filename,pData,imWidth,imHeight,nChannels,type);
+}
+
+template <class T>
+bool Image<T>::imwrite(const char* filename,ImageIO::ImageType type) const
+{
+	return ImageIO::saveImage(filename,pData,imWidth,imHeight,nChannels,type);
+}
+
+template <class T>
+void Image<T>::imshow(char* winname, int waittime /*= 1*/) const
+{
+	ImageIO::ImageType type;
+	if (IsDerivativeImage){
+		type = ImageIO::derivative;
+	}else{
+		type = ImageIO::standard;
+		float minV = 0, maxV = 255;
+		if (IsFloat()){
+			maxV = 1.0;
+		}
+		for (int i = 0; i < nElements; i++){
+			if (pData[i] < minV || pData[i] > maxV){
+				type = ImageIO::normalized;
+				break;
+			}
+		}
+	}
+	ImageIO::showImage(winname, pData, imWidth, imHeight, nChannels, type, waittime);
+}
+
+template <class T>
+void Image<T>::imagesc(char* winname, int waittime /*= 1*/) const
+{
+	if (nChannels == 1){
+		UCImage img;
+		this->normalize(img);
+		ImageIO::showGrayImageAsColor(winname, img.pData, imWidth, imHeight, 0, 255, waittime);
+	}else{
+		fprintf(stderr, "imagesc() only support one-channel image.");
+	}
+}
+
+template <class T>
+void Image<T>::ToLab() const
+{
+	if (colorType == BGR){
+		ImageProcessing::BGR2Lab(pData, pData, imWidth, imHeight);
+		colorType = LAB;
+	}
+}
+
+
+template <class T>
+template <class T1>
+void Image<T>::ToLab(Image<T1>& image) const
+{
+	if (matchDimension(image) == false)
+		image.allocate(imWidth, imHeight, nChannels);
+	ImageProcessing::BGR2Lab(pData, image.pData, imWidth, imHeight);
+}
+
+//template <class T>
+//bool Image<T>::imwrite(const QString &filename, ImageIO::ImageType imagetype, int quality) const
+//{
+//	return ImageIO::writeImage(filename,(const T*&)pData,imWidth,imHeight,nChannels,imagetype,quality);
+//}
+//
+//template <class T>
+//bool Image<T>::imwrite(const QString &filename, T min, T max, int quality) const
+//{
+//	return ImageIO::writeImage(filename,(const T*&)pData,imWidth,imHeight,nChannels,min,max,quality);
+//}
+
+#endif
+
+//------------------------------------------------------------------------------------------
+// function to get x-derivative of the image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::dx(Image<T1>& result,bool IsAdvancedFilter) const
+{
+	if(matchDimension(result)==false)
+		result.allocate(imWidth,imHeight,nChannels);
+	result.reset();
+	result.setDerivative();
+	T1*& data=result.data();
+	int i,j,k,offset;
+	if(IsAdvancedFilter==false)
+		for(i=0;i<imHeight;i++)
+			for(j=0;j<imWidth-1;j++)
+			{
+				offset=i*imWidth+j;
+				for(k=0;k<nChannels;k++)
+					data[offset*nChannels+k]=(T1)pData[(offset+1)*nChannels+k]-pData[offset*nChannels+k];
+			}
+	else
+	{
+		float xFilter[5]={1,-8,0,8,-1};
+		for(i=0;i<5;i++)
+			xFilter[i]/=12;
+		ImageProcessing::hfiltering(pData,data,imWidth,imHeight,nChannels,xFilter,2);
+	}
+}
+
+template <class T>
+template <class T1>
+Image<T1> Image<T>::dx(bool IsAdvancedFilter) const
+{
