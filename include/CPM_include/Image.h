@@ -1079,3 +1079,145 @@ template <class T>
 template <class T1>
 Image<T1> Image<T>::dx(bool IsAdvancedFilter) const
 {
+	Image<T1> result;
+	dx<T1>(result,IsAdvancedFilter);
+	return result;
+}
+
+//------------------------------------------------------------------------------------------
+// function to get y-derivative of the image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::dy(Image<T1>& result,bool IsAdvancedFilter) const
+{
+	if(matchDimension(result)==false)
+		result.allocate(imWidth,imHeight,nChannels);
+	result.setDerivative();
+	T1*& data=result.data();
+	int i,j,k,offset;
+	if(IsAdvancedFilter==false)
+		for(i=0;i<imHeight-1;i++)
+			for(j=0;j<imWidth;j++)
+			{
+				offset=i*imWidth+j;
+				for(k=0;k<nChannels;k++)
+					data[offset*nChannels+k]=(T1)pData[(offset+imWidth)*nChannels+k]-pData[offset*nChannels+k];
+			}
+	else
+	{
+		float yFilter[5]={1,-8,0,8,-1};
+		for(i=0;i<5;i++)
+			yFilter[i]/=12;
+		ImageProcessing::vfiltering(pData,data,imWidth,imHeight,nChannels,yFilter,2);
+	}
+}
+
+template <class T>
+template <class T1>
+Image<T1> Image<T>::dy(bool IsAdvancedFilter) const
+{
+	Image<T1> result;
+	dy<T1>(result,IsAdvancedFilter);
+	return result;
+}
+
+//------------------------------------------------------------------------------------------
+// function to compute the second order derivative 
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::dxx(Image<T1> &image) const
+{
+	if(!matchDimension(image))
+		image.allocate(imWidth,imHeight,nChannels);
+	T1* pDstData=image.data();
+	if(nChannels==1) // if there is only one image channel
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+			{
+				int offset=i*imWidth+j;
+				if(j==0)
+				{
+					pDstData[offset] = -pData[offset] + pData[offset + 1];
+					continue;
+				}
+				if(j==imWidth-1)
+				{
+					pDstData[offset] = pData[offset - 1] - pData[offset];
+					continue;
+				}
+				pDstData[offset] = pData[offset - 1] - 2 * pData[offset] + pData[offset + 1];
+			}
+	else
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+			{
+				int offset=(i*imWidth+j)*nChannels;
+				if(j==0)
+				{
+					for (int k = 0; k < nChannels; k++)
+						pDstData[offset + k] = -pData[offset + k] + pData[offset + nChannels + k];
+					continue;
+				}
+				if(j==imWidth-1)
+				{
+					for (int k = 0; k < nChannels; k++)
+						pDstData[offset + k] = pData[offset - nChannels + k] - pData[offset + k];
+					continue;
+				}
+				for (int k = 0; k < nChannels; k++)
+					pDstData[offset + k] = pData[offset - nChannels + k] - 2 * pData[offset + k] + pData[offset + nChannels + k];
+			}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::dyy(Image<T1>& image) const
+{
+	if(!matchDimension(image))
+		image.allocate(imWidth,imHeight,nChannels);
+	T1* pDstData=image.data();
+	if(nChannels==1)
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+			{
+				int offset=i*imWidth+j;
+				if(i==0)
+				{
+					pDstData[offset] = -pData[offset] + pData[offset + imWidth];
+					continue;
+				}
+				if(i==imHeight-1)
+				{
+					pDstData[offset] = pData[offset - imWidth] - pData[offset];
+					continue;
+				}
+				pDstData[offset] = pData[offset - imWidth] - 2 * pData[offset] + pData[offset + imWidth];
+			}
+	else
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+			{
+				int offset=(i*imWidth+j)*nChannels;
+				if(i==0)
+				{
+					for (int k = 0; k < nChannels; k++)
+						pDstData[offset + k] = -pData[offset + k] + pData[offset + imWidth*nChannels + k];
+					continue;
+				}
+				if(i==imHeight-1)
+				{
+					for (int k = 0; k < nChannels; k++)
+						pDstData[offset + k] = pData[offset - imWidth*nChannels + k] - pData[offset + k];
+					continue;
+				}
+				for (int k = 0; k < nChannels; k++)
+					pDstData[offset + k] = pData[offset - imWidth*nChannels + k] - 2 * pData[offset + k] + pData[offset + imWidth*nChannels + k];
+			}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::dxy(Image<T1>& image) const
+{
