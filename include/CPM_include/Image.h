@@ -1221,3 +1221,144 @@ template <class T>
 template <class T1>
 void Image<T>::dxy(Image<T1>& image) const
 {
+	if(!matchDimension(image))
+		image.allocate(imWidth,imHeight,nChannels);
+	T1* pDstData=image.data();
+
+	//mask of second derivative
+	float pfilter2D[] = {0.25, 0, -0.25, 0, 0, 0, -0.25, 0, 0.25};
+
+	ImageProcessing::filtering(pData, pDstData, imWidth, imHeight, nChannels, pfilter2D, 1);
+}
+
+//------------------------------------------------------------------------------------------
+// function for fast laplacian computation
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::laplacian(Image<T1> &image) const
+{
+	if(!matchDimension(image))
+		image.allocate(*this);
+	image.setDerivative(true);
+	ImageProcessing::Laplacian(pData,image.data(),imWidth,imHeight,nChannels);
+}
+
+
+//------------------------------------------------------------------------------------------
+// function to compute the gradient magnitude of the image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::gradientmag(Image<T1> &image) const
+{
+	if(image.width()!=imWidth || image.height()!=imHeight)
+		image.allocate(imWidth,imHeight);
+	FImage Ix,Iy;
+	dx(Ix,true);
+	dy(Iy,true);
+	float temp;
+	float* imagedata=image.data();
+	const float *Ixdata=Ix.data(),*Iydata=Iy.data();
+	for(int i=0;i<nPixels;i++)
+	{
+		temp=0;
+		int offset=i*nChannels;
+		for(int k=0;k<nChannels;k++)
+		{
+			temp+=Ixdata[offset+k]*Ixdata[offset+k];
+			temp+=Iydata[offset+k]*Iydata[offset+k];
+		}
+		imagedata[i]=sqrt(temp);
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// function to do Gaussian smoothing
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::GaussianSmoothing(float sigma,int fsize) 
+{
+	Image<T> foo;
+	GaussianSmoothing(foo,sigma,fsize);
+	copy(foo);
+}
+
+
+
+template <class T>
+template <class T1>
+void Image<T>::GaussianSmoothing(Image<T1>& image,float sigma,int fsize) const 
+{
+	// constructing the 1D gaussian filter
+	float* gFilter;
+	gFilter=new float[fsize*2+1];
+	float sum=0;
+	sigma=sigma*sigma*2;
+	for(int i=-fsize;i<=fsize;i++)
+	{
+		gFilter[i+fsize]=exp(-(float)(i*i)/sigma);
+		sum+=gFilter[i+fsize];
+	}
+	for(int i=0;i<2*fsize+1;i++)
+		gFilter[i]/=sum;
+
+	// apply filtering
+	imfilter_hv(image,gFilter,fsize,gFilter,fsize);
+
+	delete []gFilter;
+}
+
+//------------------------------------------------------------------------------------------
+// function to do Gaussian smoothing
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::GaussianSmoothing_transpose(Image<T1>& image,float sigma,int fsize) const 
+{
+	Image<T1> foo;
+	// constructing the 1D gaussian filter
+	float* gFilter;
+	gFilter=new float[fsize*2+1];
+	float sum=0;
+	sigma=sigma*sigma*2;
+	for(int i=-fsize;i<=fsize;i++)
+	{
+		gFilter[i+fsize]=exp(-(float)(i*i)/sigma);
+		sum+=gFilter[i+fsize];
+	}
+	for(int i=0;i<2*fsize+1;i++)
+		gFilter[i]/=sum;
+
+	// apply filtering
+	imfilter_hv_transpose(image,gFilter,fsize,gFilter,fsize);
+
+	delete gFilter;
+}
+
+
+//------------------------------------------------------------------------------------------
+// function to smooth the image using a simple 3x3 filter
+// the filter is [1 factor 1]/(factor+2), applied horizontally and vertically
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::smoothing(Image<T1>& image,float factor)
+{
+	// build 
+	float filter2D[9]={1,0,1,0, 0, 0,1, 0,1};
+	filter2D[1]=filter2D[3]=filter2D[5]=filter2D[7]=factor;
+	filter2D[4]=factor*factor;
+	for(int i=0;i<9;i++)
+		filter2D[i]/=(factor+2)*(factor+2);
+
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	imfilter<T1>(image,filter2D,1);
+}
+
+template <class T>
+template <class T1>
+Image<T1> Image<T>::smoothing(float factor)
+{
+	Image<T1> result;
