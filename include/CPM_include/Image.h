@@ -1362,3 +1362,133 @@ template <class T1>
 Image<T1> Image<T>::smoothing(float factor)
 {
 	Image<T1> result;
+	smoothing(result,factor);
+	return result;
+}
+
+template <class T>
+void Image<T>::smoothing(float factor)
+{
+	Image<T> result(imWidth,imHeight,nChannels);
+	smoothing(result,factor);
+	copyData(result);
+}
+
+template <class T>
+void Image<T>::MedianFiltering(int fsize)
+{
+	ImageProcessing::Medianfiltering(pData, pData, imWidth, imHeight, nChannels, fsize);
+}
+
+//------------------------------------------------------------------------------------------
+//	 function of image filtering
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::imfilter(Image<T1>& image,const float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::filtering(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::imfilter(Image<T1>& image,const Image<T2>& kernel) const
+{
+	if(kernel.width()!=kernel.height())
+	{
+		cout<<"Error in Image<T>::imfilter(Image<T1>& image,const Image<T2>& kernel)"<<endl;
+		exit(-1);
+	}
+	int winsize = (kernel.width()-1)/2;
+	imfilter(image,kernel.data(),winsize);
+}
+
+template <class T>
+template <class T1>
+Image<T1> Image<T>::imfilter(const float *filter, int fsize) const
+{
+	Image<T1> result;
+	imfilter(result,filter,fsize);
+	return result;
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_h(Image<T1>& image,float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::hfiltering(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_v(Image<T1>& image,float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::vfiltering(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_hv(Image<T1> &image, const float *hfilter, int hfsize, const float *vfilter, int vfsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	T1* pTempBuffer;
+	pTempBuffer = (T1*)xmalloc(nElements * sizeof(T1));
+	ImageProcessing::hfiltering(pData,pTempBuffer,imWidth,imHeight,nChannels,hfilter,hfsize);
+	ImageProcessing::vfiltering(pTempBuffer,image.data(),imWidth,imHeight,nChannels,vfilter,vfsize);
+	xfree(pTempBuffer);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_hv(Image<T1>& image,const Image<float>& hfilter,const Image<float>& vfilter) const
+{
+	int hfsize = (__max(hfilter.width(),hfilter.height())-1)/2;
+	int vfsize = (__max(vfilter.width(),vfilter.height())-1)/2;
+	imfilter_hv(image,hfilter.data(),hfsize,vfilter.data(),vfsize);
+}
+
+template<class T>
+bool Image<T>::BoundaryCheck() const
+{
+	for(int i = 0;i<nElements;i++)
+		if(!(pData[i]<1E10 && pData[i]>-1E10))
+		{
+			cout<<"Error, bad data!"<<endl;
+			return false;
+		}
+	return true;
+}
+
+
+//------------------------------------------------------------------------------------------
+//	 function of image filtering transpose
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::imfilter_transpose(Image<T1>& image,const float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::filtering_transpose(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::imfilter_transpose(Image<T1>& image,const Image<T2>& kernel) const
+{
+	if(kernel.width()!=kernel.height())
+	{
+		cout<<"Error in Image<T>::imfilter(Image<T1>& image,const Image<T2>& kernel)"<<endl;
+		exit(-1);
+	}
+	int winsize = (kernel.width()-1)/2;
+	imfilter_transpose(image,kernel.data(),winsize);
+}
