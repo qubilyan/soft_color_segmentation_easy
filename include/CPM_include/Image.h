@@ -1492,3 +1492,136 @@ void Image<T>::imfilter_transpose(Image<T1>& image,const Image<T2>& kernel) cons
 	int winsize = (kernel.width()-1)/2;
 	imfilter_transpose(image,kernel.data(),winsize);
 }
+
+template <class T>
+template <class T1>
+Image<T1> Image<T>::imfilter_transpose(const float *filter, int fsize) const
+{
+	Image<T1> result;
+	imfilter_transpose(result,filter,fsize);
+	return result;
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_h_transpose(Image<T1>& image,float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::hfiltering_transpose(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_v_transpose(Image<T1>& image,float* filter,int fsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	ImageProcessing::vfiltering_transpose(pData,image.data(),imWidth,imHeight,nChannels,filter,fsize);
+}
+
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_hv_transpose(Image<T1> &image, const float *hfilter, int hfsize, const float *vfilter, int vfsize) const
+{
+	if(matchDimension(image)==false)
+		image.allocate(imWidth,imHeight,nChannels);
+	Image<T1> temp(imWidth,imHeight,nChannels);
+	//imwrite("input.jpg");
+	ImageProcessing::vfiltering_transpose(pData,temp.data(),imWidth,imHeight,nChannels,vfilter,vfsize);
+	//temp.imwrite("temp.jpg");
+	ImageProcessing::hfiltering_transpose(temp.data(),image.data(),imWidth,imHeight,nChannels,hfilter,hfsize);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::imfilter_hv_transpose(Image<T1>& image,const Image<float>& hfilter,const Image<float>& vfilter) const
+{
+	int hfsize = (__max(hfilter.width(),hfilter.height())-1)/2;
+	int vfsize = (__max(vfilter.width(),vfilter.height())-1)/2;
+	imfilter_hv_transpose(image,hfilter.data(),hfsize,vfilter.data(),vfsize);
+}
+
+//------------------------------------------------------------------------------------------
+//	 function for desaturation
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::desaturate(Image<T1> &image) const
+{
+	if(nChannels!=3)
+	{
+		collapse(image);
+		return;
+	}
+	if (!(image.width() == imWidth && image.height() == imHeight && image.nchannels() == 1))
+		image.allocate(imWidth,imHeight,1);
+	T1* data=image.data();
+	int offset;
+	for(int i=0;i<nPixels;i++)
+	{
+		offset=i*3;
+		if(colorType == RGB)
+			data[i]=(float)pData[offset]*.299+pData[offset+1]*.587+pData[offset+2]*.114;
+		else
+			data[i]=(float)pData[offset]*.114+pData[offset+1]*.587+pData[offset+2]*.299;
+	}
+}
+
+template <class T>
+void Image<T>::desaturate()
+{
+	Image<T> temp;
+	desaturate(temp);
+	copyData(temp);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::collapse(Image<T1> &image,collapse_type type) const
+{
+	if(!(image.width()==imWidth && image.height()==imHeight && image.nchannels()==1))
+		image.allocate(imWidth,imHeight,1);
+	image.setDerivative(IsDerivativeImage);
+	if(nChannels == 1)
+	{
+		image.copy(*this);
+		return;
+	}
+	T1* data=image.data();
+	int offset;
+	float temp;
+	for(int i=0;i<nPixels;i++)
+	{
+		offset=i*nChannels;
+		switch(type){
+			case collapse_average:
+				temp=0;
+				for(int j=0;j<nChannels;j++)
+					temp+=pData[offset+j];
+				data[i]=temp/nChannels;
+				break;
+			case collapse_max:
+				data[i] = pData[offset];
+				for(int j=1;j<nChannels;j++)
+					data[i] = __max(data[i],pData[offset+j]);
+				break;
+			case collapse_min:
+				data[i] = pData[offset];
+				for(int j = 1;j<nChannels;j++)
+					data[i]=__min(data[i],pData[offset+j]);
+				break;
+		}
+	}
+}
+
+template <class T>
+void Image<T>::collapse(collapse_type type)
+{
+	if(nChannels == 1)
+		return;
+	Image<T> result;
+	collapse(result,type);
+	copyData(result);
+}
