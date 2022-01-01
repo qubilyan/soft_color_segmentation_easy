@@ -1625,3 +1625,161 @@ void Image<T>::collapse(collapse_type type)
 	collapse(result,type);
 	copyData(result);
 }
+
+//------------------------------------------------------------------------------------------
+//  function to concatenate two images
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1,class T2>
+void Image<T>::concatenate(Image<T1> &destImage, const Image<T2> &addImage) const
+{
+	if(addImage.width()!=imWidth || addImage.height()!=imHeight)
+	{
+		destImage.copy(*this);
+		return;
+	}
+	int extNChannels=nChannels+addImage.nchannels();
+	if(destImage.width()!=imWidth || destImage.height()!=imHeight || destImage.nchannels()!=extNChannels)
+		destImage.allocate(imWidth,imHeight,extNChannels);
+	int offset;
+	T1*& pDestData=destImage.data();
+	const T2*& pAddData=addImage.data();
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+		{
+			offset=i*imWidth+j;
+			for(int k=0;k<nChannels;k++)
+				pDestData[offset*extNChannels+k]=pData[offset*nChannels+k];
+			for(int k=nChannels;k<extNChannels;k++)
+				pDestData[offset*extNChannels+k]=pAddData[offset*addImage.nchannels()+k-nChannels];
+		}
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::concatenate(Image<T1> &destImage, const Image<T2> &addImage,float ratio) const
+{
+	if(addImage.width()!=imWidth || addImage.height()!=imHeight)
+	{
+		destImage.copy(*this);
+		return;
+	}
+	int extNChannels=nChannels+addImage.nchannels();
+	if(destImage.width()!=imWidth || destImage.height()!=imHeight || destImage.nchannels()!=extNChannels)
+		destImage.allocate(imWidth,imHeight,extNChannels);
+	int offset;
+	T1*& pDestData=destImage.data();
+	const T2*& pAddData=addImage.data();
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+		{
+			offset=i*imWidth+j;
+			for(int k=0;k<nChannels;k++)
+				pDestData[offset*extNChannels+k]=pData[offset*nChannels+k];
+			for(int k=nChannels;k<extNChannels;k++)
+				pDestData[offset*extNChannels+k]=pAddData[offset*addImage.nchannels()+k-nChannels]*ratio;
+		}
+}
+
+
+template <class T>
+template <class T1>
+Image<T> Image<T>::concatenate(const Image<T1> &addImage) const
+{
+	Image<T> destImage;
+	concatenate(destImage,addImage);
+	return destImage;
+}
+
+//------------------------------------------------------------------------------------------
+// function to separate the image into two
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1,class T2>
+void Image<T>::separate(unsigned int firstNChannels, Image<T1> &image1, Image<T2> &image2) const
+{
+	image1.IsDerivativeImage=IsDerivativeImage;
+	image2.IsDerivativeImage=IsDerivativeImage;
+
+	if(firstNChannels>=nChannels)
+	{
+		image1=*this;
+		image2.allocate(imWidth,imHeight,0);
+		return;
+	}
+	if(firstNChannels==0)
+	{
+		image1.allocate(imWidth,imHeight,0);
+		image2=*this;
+		return;
+	}
+	int secondNChannels=nChannels-firstNChannels;
+	if(image1.width()!=imWidth || image1.height()!=imHeight || image1.nchannels()!=firstNChannels)
+		image1.allocate(imWidth,imHeight,firstNChannels);
+	if(image2.width()!=imWidth || image2.height()!=imHeight || image2.nchannels()!=secondNChannels)
+		image2.allocate(imWidth,imHeight,secondNChannels);
+
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+		{
+			int offset=i*imWidth+j;
+			for(int k=0;k<firstNChannels;k++)
+				image1.pData[offset*firstNChannels+k]=pData[offset*nChannels+k];
+			for(int k=firstNChannels;k<nChannels;k++)
+				image2.pData[offset*secondNChannels+k-firstNChannels]=pData[offset*nChannels+k];
+		}
+}
+
+template <class T>
+void Image<T>::AddBorder(Image<T>& outImg, int borderWidth) const
+{
+	int extW = imWidth + 2*borderWidth;
+	int extH = imHeight + 2*borderWidth;
+	int ch = nChannels;
+	if (!outImg.matchDimension(extW, extH, ch))
+		outImg.allocate(extW, extH, ch);
+#if 1
+	for(int i=0;i<extH;i++){
+		for(int j=0;j<extW;j++){
+			int x = j-borderWidth;
+			int y = i-borderWidth;
+			x = ImageProcessing::EnforceRange(x, imWidth);
+			y = ImageProcessing::EnforceRange(y, imHeight);
+			T* dst = outImg.pData + (i*extW + j)*ch;
+			T* src = pData + (y*imWidth + x)*ch;
+			memcpy(dst, src, sizeof(T)*ch);
+		}
+	}
+#else
+	memset(outImg.pData, 0, outImg.nElements*sizeof(T));
+	for (int i = 0; i < imHeight; i++){
+		T* dstPtr = outImg.rowPtr(i + borderWidth) + borderWidth*ch;
+		memcpy(dstPtr, pData + i*imWidth*ch, imWidth*ch*sizeof(T));
+	}
+#endif
+}
+
+//------------------------------------------------------------------------------------------
+// function to separate the image into two
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::getPatch(Image<T1>& patch,float x,float y,int wsize) const
+{
+	int wlength=wsize*2+1;
+	if(patch.width()!=wlength || patch.height()!=wlength || patch.nchannels()!=nChannels)
+		patch.allocate(wlength,wlength,nChannels);
+	else
+		patch.reset();
+	ImageProcessing::getPatch(pData,patch.data(),imWidth,imHeight,nChannels,x,y,wsize);
+}
+
+//------------------------------------------------------------------------------------------
+// function to crop an image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::crop(Image<T1>& patch,int Left,int Top,int Width,int Height) const
+{
+	if(patch.width()!=Width || patch.height()!=Height || patch.nchannels()!=nChannels)
+		patch.allocate(Width,Height,nChannels);
