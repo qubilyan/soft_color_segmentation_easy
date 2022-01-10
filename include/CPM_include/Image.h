@@ -1924,3 +1924,158 @@ void Image<T>::MultiplywithAcross(const Image<T1> &image1)
 	for(int i=0;i<nPixels;i++)
 		for(int j = 0;j<nChannels;j++)
 			pData[i*nChannels+j]*=pData1[i];
+}
+
+
+template <class T>
+void Image<T>::Multiplywith(float value)
+{
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float)){
+		__m128 *p0 = (__m128*)pData;
+		__m128 _val;
+		_val = _mm_set_ps1(value);
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_mul_ps(*p0, _val);
+			p0++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] *= value;
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// function to add image2 to image1 to the current image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1,class T2>
+void Image<T>::Add(const Image<T1>& image1,const Image<T2>& image2)
+{
+	if(image1.matchDimension(image2)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Add()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float) && typeid(T2) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1, *p2 = (__m128*)pData2;
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_add_ps(*p1, *p2);
+			p0++; p1++; p2++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] = pData1[i] + pData2[i];
+	}
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::Add(const Image<T1>& image1,const Image<T2>& image2,float ratio)
+{
+	if(image1.matchDimension(image2)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Add()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float) && typeid(T2) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1, *p2 = (__m128*)pData2;
+		__m128 _rat, _tmp;
+		_rat = _mm_set_ps1(ratio);
+		for (int i = 0; i < nElements / 4; i++){
+			_tmp = _mm_mul_ps(*p2, _rat);
+			*p0 = _mm_add_ps(*p1, _tmp);
+			p0++; p1++; p2++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] = pData1[i] + pData2[i] * ratio;
+	}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::Add(const Image<T1>& image1,const float ratio)
+{
+	if(matchDimension(image1)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Add()!"<<endl;
+		return;
+	}
+	const T1*& pData1=image1.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1;
+		__m128 _rat, _tmp;
+		_rat = _mm_set_ps1(ratio);
+		for (int i = 0; i < nElements / 4; i++){
+			_tmp = _mm_mul_ps(*p1, _rat);
+			*p0 = _mm_add_ps(*p0, _tmp);
+			p0++; p1++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] += pData1[i] * ratio;
+	}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::Add(const Image<T1>& image1)
+{
+	if(matchDimension(image1)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Add()!"<<endl;
+		return;
+	}
+	const T1*& pData1=image1.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1;
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_add_ps(*p0, *p1);
+			p0++; p1++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] += pData1[i];
+	}
+}
+
+template <class T>
+void Image<T>::Add(const T value)
+{
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float)){
+		__m128 *p0 = (__m128*)pData;
