@@ -1783,3 +1783,144 @@ void Image<T>::crop(Image<T1>& patch,int Left,int Top,int Width,int Height) cons
 {
 	if(patch.width()!=Width || patch.height()!=Height || patch.nchannels()!=nChannels)
 		patch.allocate(Width,Height,nChannels);
+	// make sure that the cropping is valid
+	if(Left<0 || Top<0 || Left>=imWidth || Top>=imHeight)
+	{
+		cout<<"The cropping coordinate is outside the image boundary!"<<endl;
+		return;
+	}
+	if(Width<0 || Height<0 || Width+Left>imWidth || Height+Top>imHeight)
+	{
+		cout<<"The patch to crop is invalid!"<<endl;
+		return;
+	}
+	ImageProcessing::cropImage(pData,imWidth,imHeight,nChannels,patch.data(),Left,Top,Width,Height);
+}
+
+template <class T>
+void Image<T>::flip_horizontal(Image<T>& image)
+{
+	if(!image.matchDimension(*this))
+		image.allocate(*this);
+	for(int i = 0;i<imHeight;i++)
+		for(int j = 0;j<imWidth;j++)
+		{
+			int offset1 = (i*imWidth+j)*nChannels;
+			int offset2 = (i*imWidth+imWidth-1-j)*nChannels;
+			for(int k = 0;k<nChannels;k++)
+				image.pData[offset2+k] = pData[offset1+k];
+		}
+}
+
+template <class T>
+void Image<T>::flip_horizontal()
+{
+	Image<T> temp(*this);
+	flip_horizontal(temp);
+	copyData(temp);
+}
+
+//------------------------------------------------------------------------------------------
+// function to multiply image1, image2 and image3 to the current image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1,class T2,class T3>
+void Image<T>::Multiply(const Image<T1>& image1,const Image<T2>& image2,const Image<T3>& image3)
+{
+	if(image1.matchDimension(image2)==false || image2.matchDimension(image3)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Multiply()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+	const T3*& pData3=image3.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float)
+		&& typeid(T2) == typeid(float) && typeid(T3) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1, 
+			*p2 = (__m128*)pData2, *p3 = (__m128*)pData3;
+		__m128 tmp;
+		for (int i = 0; i < nElements / 4; i++){
+			tmp = _mm_mul_ps(*p1, *p2);
+			*p0 = _mm_mul_ps(tmp, *p3);
+			p0++; p1++; p2++; p3++;
+		}
+	}else
+#endif
+	{
+		for(int i=0;i<nElements;i++)
+			pData[i] = pData1[i] * pData2[i] * pData3[i];
+	}
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::Multiply(const Image<T1>& image1,const Image<T2>& image2)
+{
+	if(image1.matchDimension(image2)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Multiply()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+
+	for(int i=0;i<nElements;i++)
+		pData[i]=pData1[i]*pData2[i];
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::MultiplyAcross(const Image<T1>& image1,const Image<T2>& image2)
+{
+	if(image1.width() != image2.width() || image1.height()!=image2.height() || image2.nchannels()!=1)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Multiply()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+
+	for(int i = 0;i<nPixels;i++)
+		for(int j=0;j<nChannels;j++)
+			pData[i*nChannels+j] = pData1[i*nChannels+j]*pData2[i];
+}
+
+template <class T>
+template <class T1>
+void Image<T>::Multiplywith(const Image<T1> &image1)
+{
+	if(matchDimension(image1)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Multiplywith()!"<<endl;
+		return;
+	}
+	const T1*& pData1=image1.data();
+	for(int i=0;i<nElements;i++)
+		pData[i]*=pData1[i];
+}
+
+template <class T>
+template <class T1>
+void Image<T>::MultiplywithAcross(const Image<T1> &image1)
+{
+	if(imWidth!=image1.width() || imHeight!=image1.height() || image1.nchannels()!=1)
+	{
+		cout<<"Error in image dimensions--function Image<T>::MultiplywithAcross()!"<<endl;
+		return;
+	}
+	const T1*& pData1=image1.data();
+	for(int i=0;i<nPixels;i++)
+		for(int j = 0;j<nChannels;j++)
+			pData[i*nChannels+j]*=pData1[i];
