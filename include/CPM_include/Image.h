@@ -2206,3 +2206,152 @@ void Image<T>::normalize(Image<T1>& image, float minV/* = -1*/, float maxV/* = -
 template <class T>
 void Image<T>::normalize(float minV/* = -1*/, float maxV/* = -1*/)
 {
+	Image<T> temp;
+	normalize(temp, minV, maxV);
+	copyData(temp);
+}
+
+template <class T>
+float Image<T>::norm2() const
+{
+	float result=0;
+	for(int i=0;i<nElements;i++)
+		result+=pData[i]*pData[i];
+	return result;
+}
+
+template <class T>
+void Image<T>::threshold(float minV/* = FLT_MIN*/, float maxV/* = FLT_MAX*/)
+{
+	if (minV == FLT_MIN){
+		minV = 0;
+	}
+	if (maxV == FLT_MAX){
+		if (IsFloat())
+			maxV = 1;
+		else
+			maxV = 255;
+	}
+	for(int i = 0;i<nPixels*nChannels;i++)
+		pData[i] = __min(__max(pData[i], minV), maxV);
+}
+
+template <class T>
+float Image<T>::sum() const
+{
+	float result=0;
+	for(int i=0;i<nElements;i++)
+		result+=pData[i];
+	return result;
+}
+
+template <class T>
+template <class T1>
+float Image<T>::innerproduct(Image<T1> &image) const
+{
+	float result=0;
+	const T1* pData1=image.data();
+	for(int i=0;i<nElements;i++)
+		result+=pData[i]*pData1[i];
+	return result;
+}
+
+#ifndef _MATLAB
+//template <class T>
+//bool Image<T>::writeImage(QFile &file) const
+//{
+//	file.write((char *)&imWidth,sizeof(int));
+//	file.write((char *)&imHeight,sizeof(int));
+//	file.write((char *)&nChannels,sizeof(int));
+//	file.write((char *)&IsDerivativeImage,sizeof(bool));
+//	if(file.write((char *)pData,sizeof(T)*nElements)!=sizeof(T)*nElements)
+//		return false;
+//	return true;
+//}
+//
+//template <class T>
+//bool Image<T>::readImage(QFile& file)
+//{
+//	clear();
+//	file.read((char *)&imWidth,sizeof(int));
+//	file.read((char *)&imHeight,sizeof(int));
+//	file.read((char *)&nChannels,sizeof(int));
+//	file.read((char *)&IsDerivativeImage,sizeof(bool));
+//	if(imWidth<0 ||imWidth>100000 || imHeight<0 || imHeight>100000 || nChannels<0 || nChannels>10000)
+//		return false;
+//	allocate(imWidth,imHeight,nChannels);
+//	if(file.read((char *)pData,sizeof(T)*nElements)!=sizeof(T)*nElements)
+//		return false;
+//	return true;
+//}
+//
+//template <class T>
+//bool Image<T>::writeImage(const QString &filename) const
+//{
+//	QFile file(filename);
+//	if(file.open(QIODevice::WriteOnly)==false)
+//		return false;
+//	if(!writeImage(file))
+//		return false;
+//	return true;
+//}
+//
+//template <class T>
+//bool Image<T>::readImage(const QString &filename)
+//{
+//	QFile file(filename);
+//	if(file.open(QIODevice::ReadOnly)==false)
+//		return false;
+//	if(!readImage(file))
+//		return false;
+//	return true;
+//}
+#endif
+
+template <class T>
+template <class T1>
+void Image<T>::Integral(Image<T1>& image) const
+{
+	ImageProcessing::Integral(pData, image.data(), imWidth, imHeight, nChannels);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::BoxFilter(Image<T1>& image, int r, bool norm /*= true*/) const
+{
+	ImageProcessing::BoxFilter(pData, image.data(), imWidth, imHeight, nChannels, r, norm);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::BilateralFiltering(Image<T1>& other,int fsize,float filter_sigma,float range_sigma) const
+{
+	float *pBuffer;
+	Image<T1> result(other);
+	pBuffer=new float[other.nchannels()];
+
+	// set spatial weight to save time
+	float *pSpatialWeight;
+	int flength = fsize*2+1;
+	pSpatialWeight = new float[flength*flength];
+	for(int i=-fsize;i<=fsize;i++)
+		for(int j=-fsize;j<=fsize;j++)
+			pSpatialWeight[(i+fsize)*flength+j+fsize]=exp(-(float)(i*i+j*j)/(2*filter_sigma*filter_sigma));
+
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+		{
+			float totalWeight=0;
+			for(int k=0;k<other.nchannels();k++)
+				pBuffer[k]=0;
+			for(int ii=-fsize;ii<=fsize;ii++)
+				for(int jj=-fsize;jj<=fsize;jj++)
+				{
+					int x=j+jj;
+					int y=i+ii;
+					if(x<0 || x>=imWidth || y<0 || y>=imHeight)
+						continue;
+
+					// compute weight
+					int offset=(y*imWidth+x)*nChannels;
+					float temp=0;
