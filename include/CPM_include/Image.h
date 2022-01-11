@@ -2355,3 +2355,139 @@ void Image<T>::BilateralFiltering(Image<T1>& other,int fsize,float filter_sigma,
 					// compute weight
 					int offset=(y*imWidth+x)*nChannels;
 					float temp=0;
+					for(int k=0;k<nChannels;k++)
+					{
+						float diff=pData[offset+k]-pData[(i*imWidth+j)*nChannels+k];
+						temp+=diff*diff;
+					}
+					float weight=exp(-temp/(2*range_sigma*range_sigma));
+					weight *= pSpatialWeight[(ii+fsize)*flength+jj+fsize];
+					//weight*=exp(-(float)(ii*ii+jj*jj)/(2*filter_sigma*filter_sigma));
+					totalWeight+=weight;
+					for(int k=0;k<other.nchannels();k++)
+						pBuffer[k]+=other.data()[(y*imWidth+x)*other.nchannels()+k]*weight;
+				}
+			for(int k=0;k<other.nchannels();k++)
+				result.data()[(i*imWidth+j)*other.nchannels()]=pBuffer[k]/totalWeight;
+		}
+	other.copyData(result);
+	delete []pBuffer;
+	delete []pSpatialWeight;
+}
+
+
+template <class T>
+//Image<T>  Image<T>::BilateralFiltering(int fsize,float filter_sigma,float range_sigma)
+void  Image<T>::imBilateralFiltering(Image<T>& result,int fsize,float filter_sigma,float range_sigma) const
+{
+	//Image<T> result(*this);
+	result.allocate(*this);
+
+	float *pBuffer;
+	pBuffer=new float[nChannels];
+
+	// set spatial weight to save time
+	float *pSpatialWeight;
+	int flength = fsize*2+1;
+	pSpatialWeight = new float[flength*flength];
+	for(int i=-fsize;i<=fsize;i++)
+		for(int j=-fsize;j<=fsize;j++)
+			pSpatialWeight[(i+fsize)*flength+j+fsize]=exp(-(float)(i*i+j*j)/(2*filter_sigma*filter_sigma));
+
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+		{
+			float totalWeight=0;
+			for(int k=0;k<nChannels;k++)
+				pBuffer[k]=0;
+			int offset0 = (i*imWidth+j)*nChannels;
+			for(int ii=-fsize;ii<=fsize;ii++)
+				for(int jj=-fsize;jj<=fsize;jj++)
+				{
+					int x=j+jj;
+					int y=i+ii;
+					if(x<0 || x>=imWidth || y<0 || y>=imHeight)
+						continue;
+
+					// compute weight
+					int offset=(y*imWidth+x)*nChannels;
+					float temp=0;
+					for(int k=0;k<nChannels;k++)
+					{
+						float diff=pData[offset+k]-pData[offset0+k];
+						temp+=diff*diff;
+					}
+					float weight=exp(-temp/(2*range_sigma*range_sigma));
+					weight *= pSpatialWeight[(ii+fsize)*flength+jj+fsize];
+
+					//weight*=exp(-(float)(ii*ii+jj*jj)/(2*filter_sigma*filter_sigma));
+					totalWeight+=weight;
+					for(int k=0;k<nChannels;k++)
+						pBuffer[k]+=pData[offset+k]*weight;
+				}
+			for(int k=0;k<nChannels;k++)
+				result.data()[offset0+k]=pBuffer[k]/totalWeight;
+
+		}
+	delete []pBuffer;
+	delete []pSpatialWeight;
+	//return result;
+}
+
+template <class T>
+template <class T1,class T2>
+int Image<T>::kmeansIndex(int pixelIndex,T1& MinDistance,const T2* pDictionary,int nVocabulary,int nDim)
+{
+	int offset1 = pixelIndex*nChannels;
+	T1 Distance = 0;
+
+
+	int index;
+	for(int j = 0;j<nVocabulary;j++)
+	{
+		int offset2 = j*nDim;
+		Distance = 0;
+		for(int k = 0;k<nDim;k++)
+			Distance += (T1)(pData[offset1+k] - pDictionary[offset2+k])*(pData[offset1+k] - pDictionary[offset2+k]);
+		if(j==0)
+		{
+			MinDistance = Distance;
+			index = 0;
+		}
+		else if(Distance < MinDistance)
+		{
+			MinDistance = Distance;
+			index = j;
+		}
+	}
+	return index;
+}
+
+// function to convert an image to visual words based on the vocabulary
+template <class T>
+template <class T1,class T2>
+void Image<T>::ConvertToVisualWords(Image<T1> &result, const T2 *pDictionary, int nDim, int nVocabulary)
+{
+	if(nChannels !=nDim)
+	{
+		cout<<"The dimension of the vocabulary must match to the nChannels of the image"<<endl;
+		return;
+	}
+	if(result.matchDimension(imWidth,imHeight,1))
+		result.allocate(imWidth,imHeight);
+	
+	bool isFloat = IsFloat();
+	for(int i = 0;i<nPixels;i++)
+	{
+		if(isFloat)
+		{
+			float minDistance;
+			result[i] = kmeansIndex(i,minDistance,pDictionary,nVocabulary);
+		}
+		else
+		{
+			int minDistance;
+			result[i] = kmeansIndex(i,minDistance,pDictionary,nVocabulary);
+		}
+	}
+}
