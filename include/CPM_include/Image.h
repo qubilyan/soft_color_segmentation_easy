@@ -2079,3 +2079,130 @@ void Image<T>::Add(const T value)
 #ifdef WITH_SSE
 	if (typeid(T) == typeid(float)){
 		__m128 *p0 = (__m128*)pData;
+		__m128 _val;
+		_val = _mm_set_ps1(value);
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_add_ps(*p0, _val);
+			p0++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] += value;
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// function to subtract image2 from image1
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1,class T2>
+void Image<T>::Subtract(const Image<T1> &image1, const Image<T2> &image2)
+{
+	if(image1.matchDimension(image2)==false)
+	{
+		cout<<"Error in image dimensions--function Image<T>::Subtract()!"<<endl;
+		return;
+	}
+	if(matchDimension(image1)==false)
+		allocate(image1);
+
+	const T1*& pData1=image1.data();
+	const T2*& pData2=image2.data();
+
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float) && typeid(T1) == typeid(float) && typeid(T2) == typeid(float)){
+		__m128 *p0 = (__m128*)pData, *p1 = (__m128*)pData1, *p2 = (__m128*)pData2;
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_sub_ps(*p1, *p2);
+			p0++; p1++; p2++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] = (T)pData1[i] - pData2[i];
+	}
+}
+
+template <class T>
+void Image<T>::Subtract(const T value)
+{
+#ifdef WITH_SSE
+	if (typeid(T) == typeid(float)){
+		__m128 *p0 = (__m128*)pData;
+		__m128 _val;
+		_val = _mm_set_ps1(value);
+		for (int i = 0; i < nElements / 4; i++){
+			*p0 = _mm_sub_ps(*p0, _val);
+			p0++;
+		}
+	}
+	else
+#endif
+	{
+		for (int i = 0; i < nElements; i++)
+			pData[i] -= value;
+	}
+}
+
+//------------------------------------------------------------------------------------------
+// square an image
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::square()
+{
+	for(int i = 0;i<nElements;i++)
+		pData[i] = pData[i]*pData[i];
+}
+
+
+//------------------------------------------------------------------------------------------
+// exp an image
+//------------------------------------------------------------------------------------------
+template <class T>
+void Image<T>::Exp(float sigma)
+{
+	for(int i = 0;i<nElements;i++)
+		pData[i] = exp(-pData[i]/sigma);
+}
+
+//------------------------------------------------------------------------------------------
+// normalize an image
+//------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::normalize(Image<T1>& image, float minV/* = -1*/, float maxV/* = -1*/) const
+{
+	if(image.width()!=imWidth || image.height()!=imHeight || image.nchannels()!=nChannels)
+		image.allocate(imWidth,imHeight,nChannels);
+
+	T realMin = immin();
+	T realMax = immax();
+
+	if (minV < 0){
+		minV = 0;
+	}
+	if (maxV < 0){
+		if (image.IsFloat())
+			maxV = 1;
+		else
+			maxV = 255;
+	}
+
+	if (realMax == realMin){
+		image.copy(*this);
+		return;
+	}
+	float ratio = (maxV - minV) / (realMax - realMin);
+	T1* data=image.data();
+	for (int i = 0; i < nElements; i++)
+		data[i] = (float)(pData[i] - realMin)*ratio + minV;
+}
+
+template <class T>
+void Image<T>::normalize(float minV/* = -1*/, float maxV/* = -1*/)
+{
