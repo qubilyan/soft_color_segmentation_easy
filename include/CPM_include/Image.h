@@ -2491,3 +2491,174 @@ void Image<T>::ConvertToVisualWords(Image<T1> &result, const T2 *pDictionary, in
 		}
 	}
 }
+
+// function to count the histogram of a specified region
+// notice that the range of the coordinate is [0,imWidth] (x) and [0,imHeight] (y)
+template <class T>
+template <class T1>
+Vector<T1> Image<T>::histogramRegion(int nBins,float left,float top,float right,float bottom) const
+{
+	Vector<T1> histogram(nBins);
+	int Left = left,Top = top,Right = right,Bottom = bottom;
+	float dLeft,dTop,dRight,dBottom;
+	dLeft = 1-(left-Left);
+	dTop = 1-(top-Top);
+	if(right > Right)
+	{
+		dRight = right - Right;
+	}
+	else
+	{
+		Right --;
+		dRight = 1;
+	}
+	if(bottom > Bottom)
+	{
+		dBottom = bottom - Bottom;
+	}
+	else
+	{
+		Bottom --;
+		dBottom = 1;
+	}
+
+	for(int i = Top; i <= Bottom; i++)
+		for(int j = Left; j <= Right; j++)
+		{
+			int offset = (i*imWidth+j)*nChannels;
+			float weight=1;
+
+			if(Top==Bottom)
+				weight *= (dTop+dBottom-1);
+			else
+			{
+				if(i==Top)
+					weight *= dTop;
+				if(i==Bottom)
+					weight *= dBottom;
+			}			
+			
+			if(Left==Right)
+				weight *= (dLeft+dRight-1);
+			else
+			{
+				if(j==Left)
+					weight *= dLeft;
+				if(j==Right)
+					weight *= dRight;
+			}
+
+			for(int k = 0;k<nChannels;k++)
+				histogram[pData[offset+k]] += weight;
+		}
+	return histogram;
+}
+
+//-----------------------------------------------------------------------------------------------------------------------
+// functions for bicubic interpolation
+//-----------------------------------------------------------------------------------------------------------------------
+template <class T>
+template <class T1>
+void Image<T>::warpImageBicubic(Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const
+{
+	float dfilter[3] = {-0.5,0,0.5};
+	FImage imdx,imdy,imdxdy;
+	imfilter_h(imdx,dfilter,1);
+	imfilter_v(imdy,dfilter,1);
+	imdx.imfilter_v(imdxdy,dfilter,1);
+	warpImageBicubic(output,imdx,imdy,imdxdy,vx,vy);
+}
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::warpImageBicubic(Image<T>& output,const Image<T1>& imdx,const Image<T1>& imdy,const Image<T1>& imdxdy,
+																		const Image<T2>& vx,const Image<T2>& vy) const
+{
+	T* pIm = pData;
+	const T1* pImDx = imdx.data();
+	const T1* pImDy = imdy.data();
+	const T1* pImDxDy = imdxdy.data();
+	int width = vx.width();
+	int height = vx.height();
+	if(!output.matchDimension(width,height,nChannels))
+		output.allocate(width,height,nChannels);
+	float a[4][4];
+	int offsets[2][2];
+
+	T ImgMax;
+	if(IsFloat())
+		ImgMax = 1;
+	else
+		ImgMax = 255;
+
+	for(int i  = 0; i<height; i++)
+		for(int j = 0;j<width;j++)
+		{
+			int offset = i*width+j;
+			float x = j + vx.pData[offset];
+			float y = i + vy.pData[offset];
+			int x0 = x;
+			int y0 = y;
+			int x1 = x0+1;
+			int y1 = y0+1;
+			x0 = __min(__max(x0,0),imWidth-1);
+			x1 = __min(__max(x1,0),imWidth-1);
+			y0 = __min(__max(y0,0),imHeight-1);
+			y1 = __min(__max(y1,0),imHeight-1);
+
+			float dx = x - x0;
+			float dy = y- y0;
+			float dx2 = dx*dx;
+			float dy2 = dy*dy;
+			float dx3 = dx*dx2;
+			float dy3 = dy*dy2;
+
+
+			for(int k = 0;k<nChannels;k++)
+			{
+				offsets[0][0] = (y0*imWidth+x0)*nChannels + k;
+				offsets[1][0] = (y0*imWidth+x1)*nChannels + k;
+				offsets[0][1] = (y1*imWidth+x0)*nChannels + k;
+				offsets[1][1] = (y1*imWidth+x1)*nChannels + k;
+
+				// set the sampling coefficients
+				BicubicCoeff(a,pIm,pImDx,pImDy,pImDxDy,offsets);
+
+				// now use the coefficients for interpolation
+				output.pData[offset*nChannels+k] = a[0][0] +          a[0][1]*dy +          a[0][2]*dy2 +           a[0][3]*dy3+
+					                                                                    a[1][0]*dx +   a[1][1]*dx*dy   + a[1][2]*dx*dy2   + a[1][3]*dx*dy3 + 
+																						a[2][0]*dx2 + a[2][1]*dx2*dy + a[2][2]*dx2*dy2 + a[2][3]*dx2*dy3+
+																						a[3][0]*dx3 + a[3][1]*dx3*dy + a[3][2]*dx3*dy2 + a[3][3]*dx3*dy3;
+				//output.pData[offset*nChannels+k] = __max(__min(output.pData[offset*nChannels+k],ImgMax),0);
+
+			}
+		}
+}
+
+
+template <class T>
+template <class T1,class T2>
+void Image<T>::warpImageBicubic(Image<T>& output,const Image<T1>& coeff,const Image<T2>& vx,const Image<T2>& vy) const
+{
+	T* pIm = pData;
+	int width = vx.width();
+	int height = vx.height();
+	if(!output.matchDimension(width,height,nChannels))
+		output.allocate(width,height,nChannels);
+	float a[4][4];
+
+	T ImgMax;
+	if(IsFloat())
+		ImgMax = 1;
+	else
+		ImgMax = 255;
+
+	for(int i  = 0; i<height; i++)
+		for(int j = 0;j<width;j++)
+		{
+			int offset = i*width+j;
+			float x = j + vx.pData[offset];
+			float y = i + vy.pData[offset];
+			int x0 = x;
+			int y0 = y;
+			int x1 = x0+1;
