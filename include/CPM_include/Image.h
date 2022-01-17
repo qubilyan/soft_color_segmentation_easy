@@ -2662,3 +2662,142 @@ void Image<T>::warpImageBicubic(Image<T>& output,const Image<T1>& coeff,const Im
 			int x0 = x;
 			int y0 = y;
 			int x1 = x0+1;
+			int y1 = y0+1;
+			x0 = __min(__max(x0,0),imWidth-1);
+			x1 = __min(__max(x1,0),imWidth-1);
+			y0 = __min(__max(y0,0),imHeight-1);
+			y1 = __min(__max(y1,0),imHeight-1);
+
+			float dx = x - x0;
+			float dy = y- y0;
+			float dx2 = dx*dx;
+			float dy2 = dy*dy;
+			float dx3 = dx*dx2;
+			float dy3 = dy*dy2;
+
+
+			for(int k = 0;k<nChannels;k++)
+			{
+				// save the coefficients
+				for(int ii = 0;ii<4;ii++)
+					for(int jj=0;jj<4;jj++)
+						a[ii][jj] = coeff.pData[(offset*nChannels+k)*16+ii*4+jj];
+
+
+				// set the sampling coefficients
+
+				// now use the coefficients for interpolation
+				output.pData[offset*nChannels+k] = a[0][0] +          a[0][1]*dy +          a[0][2]*dy2 +           a[0][3]*dy3+
+					                                                                    a[1][0]*dx +   a[1][1]*dx*dy   + a[1][2]*dx*dy2   + a[1][3]*dx*dy3 + 
+																						a[2][0]*dx2 + a[2][1]*dx2*dy + a[2][2]*dx2*dy2 + a[2][3]*dx2*dy3+
+																						a[3][0]*dx3 + a[3][1]*dx3*dy + a[3][2]*dx3*dy2 + a[3][3]*dx3*dy3;
+				//output.pData[offset*nChannels+k] = __max(__min(output.pData[offset*nChannels+k],ImgMax),0);
+
+			}
+		}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::BicubicCoeff(float a[][4],const T* pIm,const T1* pImDx,const T1* pImDy,const T1* pImDxDy,const int offsets[][2]) const
+{
+		a[0][0] = pIm[offsets[0][0]];
+		a[1][0] = pImDx[offsets[0][0]];
+		a[2][0] = -3*pIm[offsets[0][0]] + 3*pIm[offsets[1][0]] -2*pImDx[offsets[0][0]] - pImDx[offsets[1][0]];
+		a[3][0] =   2*pIm[offsets[0][0]] -  2*pIm[offsets[1][0]] +   pImDx[offsets[0][0]] +pImDx[offsets[1][0]];
+
+		a[0][1] = pImDy[offsets[0][0]];
+		a[1][1] = pImDxDy[offsets[0][0]];
+		a[2][1] = -3*pImDy[offsets[0][0]] + 3*pImDy[offsets[1][0]] - 2*pImDxDy[offsets[0][0]] - pImDxDy[offsets[1][0]];
+		a[3][1] = 2*pImDy[offsets[0][0]] - 2*pImDy[offsets[1][0]] + pImDxDy[offsets[0][0]] + pImDxDy[offsets[1][0]];
+
+		a[0][2] =      -3*pIm[offsets[0][0]]      + 3*pIm[offsets[0][1]]       -2*pImDy[offsets[0][0]]        - pImDy[offsets[0][1]];
+		a[1][2] = -3*pImDx[offsets[0][0]] + 3*pImDx[offsets[0][1]] -2*pImDxDy[offsets[0][0]] - pImDxDy[offsets[0][1]];
+		a[2][2] =		     9*pIm[offsets[0][0]]      -        9*pIm[offsets[1][0]]     -        9*pIm[offsets[0][1]]     +    9*pIm[offsets[1][1]] +
+								6*pImDx[offsets[0][0]]   +    3*pImDx[offsets[1][0]]   -     6*pImDx[offsets[0][1]] -    3*pImDx[offsets[1][1]] +
+								6*pImDy[offsets[0][0]]   -     6*pImDy[offsets[1][0]] +      3*pImDy[offsets[0][1]] -    3*pImDy[offsets[1][1]] +
+							4*pImDxDy[offsets[0][0]] + 2*pImDxDy[offsets[1][0]] + 2*pImDxDy[offsets[0][1]] + pImDxDy[offsets[1][1]];
+		a[3][2] =		    -6*pIm[offsets[0][0]]      +      6*pIm[offsets[1][0]]     +       6*pIm[offsets[0][1]]     -     6*pIm[offsets[1][1]] +
+							(-3)*pImDx[offsets[0][0]]   -     3*pImDx[offsets[1][0]]   +    3*pImDx[offsets[0][1]] +   3*pImDx[offsets[1][1]] +
+							(-4)*pImDy[offsets[0][0]]   +    4*pImDy[offsets[1][0]]    -    2*pImDy[offsets[0][1]] +   2*pImDy[offsets[1][1]] +
+						(-2)*pImDxDy[offsets[0][0]]  - 2*pImDxDy[offsets[1][0]]   -    pImDxDy[offsets[0][1]]   -  pImDxDy[offsets[1][1]];
+
+		a[0][3] =      2*pIm[offsets[0][0]]        - 2*pIm[offsets[0][1]]       + pImDy[offsets[0][0]]        + pImDy[offsets[0][1]];
+		a[1][3] = 2*pImDx[offsets[0][0]]  - 2*pImDx[offsets[0][1]]  + pImDxDy[offsets[0][0]] + pImDxDy[offsets[0][1]];
+		a[2][3] =		    -6*pIm[offsets[0][0]]      +      6*pIm[offsets[1][0]]     +       6*pIm[offsets[0][1]]     -     6*pIm[offsets[1][1]] +
+							(-4)*pImDx[offsets[0][0]]   -     2*pImDx[offsets[1][0]]   +    4*pImDx[offsets[0][1]] +   2*pImDx[offsets[1][1]] +
+							(-3)*pImDy[offsets[0][0]]   +    3*pImDy[offsets[1][0]]    -    3*pImDy[offsets[0][1]] +   3*pImDy[offsets[1][1]] +
+						(-2)*pImDxDy[offsets[0][0]]  -     pImDxDy[offsets[1][0]] -  2*pImDxDy[offsets[0][1]]   -  pImDxDy[offsets[1][1]];
+		a[3][3] =		     4*pIm[offsets[0][0]]      -        4*pIm[offsets[1][0]]     -        4*pIm[offsets[0][1]]     +    4*pIm[offsets[1][1]] +
+								2*pImDx[offsets[0][0]]   +    2*pImDx[offsets[1][0]]   -     2*pImDx[offsets[0][1]] -    2*pImDx[offsets[1][1]] +
+								2*pImDy[offsets[0][0]]   -     2*pImDy[offsets[1][0]] +      2*pImDy[offsets[0][1]] -    2*pImDy[offsets[1][1]] +
+								pImDxDy[offsets[0][0]] +     pImDxDy[offsets[1][0]] +      pImDxDy[offsets[0][1]] + pImDxDy[offsets[1][1]];
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImageBicubicCoeff(Image<T1>& output) const
+{
+	// generate derivatie filters
+	Image<float> imdx,imdy,imdxdy;
+	float dfilter[3] = {-0.5,0,0.5};
+	imfilter_h(imdx,dfilter,1);
+	imfilter_v(imdy,dfilter,1);
+	imdx.imfilter_v(imdxdy,dfilter,1);
+
+	T* pIm = pData;
+	const T1* pImDx = imdx.data();
+	const T1* pImDy = imdy.data();
+	const T1* pImDxDy = imdxdy.data();
+
+	if(!output.matchDimension(imWidth,imHeight,nChannels*16))
+		output.allocate(imWidth,imHeight,nChannels*16);
+	float a[4][4];
+	int offsets[2][2];
+
+	for(int i  = 0; i<imHeight; i++)
+		for(int j = 0;j<imWidth;j++)
+		{
+			int offset = i*imWidth+j;
+			int x0 = j;
+			int y0 = i;
+			int x1 = x0+1;
+			int y1 = y0+1;
+			x0 = __min(__max(x0,0),imWidth-1);
+			x1 = __min(__max(x1,0),imWidth-1);
+			y0 = __min(__max(y0,0),imHeight-1);
+			y1 = __min(__max(y1,0),imHeight-1);
+
+			for(int k = 0;k<nChannels;k++)
+			{
+				offsets[0][0] = (y0*imWidth+x0)*nChannels + k;
+				offsets[1][0] = (y0*imWidth+x1)*nChannels + k;
+				offsets[0][1] = (y1*imWidth+x0)*nChannels + k;
+				offsets[1][1] = (y1*imWidth+x1)*nChannels + k;
+
+				// set the sampling coefficients
+				BicubicCoeff(a,pIm,pImDx,pImDy,pImDxDy,offsets);
+
+				// save the coefficients
+				for(int ii = 0;ii<4;ii++)
+					for(int jj=0;jj<4;jj++)
+						output.pData[(offset*nChannels+k)*16+ii*4+jj] = a[ii][jj];
+			}
+		}
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& vx,const Image<T1>& vy) const
+{
+	float dfilter[3] = {-0.5,0,0.5};
+	FImage imdx,imdy,imdxdy;
+	imfilter_h(imdx,dfilter,1);
+	imfilter_v(imdy,dfilter,1);
+	imdx.imfilter_v(imdxdy,dfilter,1);
+	warpImageBicubicRef(ref,output,imdx,imdy,imdxdy,vx,vy);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Image<T1>& flow) const
