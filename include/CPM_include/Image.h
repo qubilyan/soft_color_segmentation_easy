@@ -3105,3 +3105,64 @@ bool Image<T>::LoadMatlabImage(const mxArray* matrix,bool IsImageScaleCovnersion
 		LoadMatlabImageCore<float>(matrix,IsImageScaleCovnersion);
 		return true;
 	}
+	mexErrMsgTxt("Unknown type of the image!");
+	return false;
+}
+
+
+template <class T>
+template <class T1>
+void Image<T>::ConvertFromMatlab(const T1 *pMatlabPlane, int _width, int _height, int _nchannels)
+{
+	if(imWidth!=_width || imHeight!=_height || nChannels!=_nchannels)
+		allocate(_width,_height,_nchannels);
+	int offset=0;
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+			for(int k=0;k<nChannels;k++)
+				pData[offset++]=pMatlabPlane[k*nPixels+j*imHeight+i];
+}
+
+// convert image data to matlab matrix
+template <class T>
+template <class T1>
+void Image<T>::ConvertToMatlab(T1 *pMatlabPlane) const
+{
+	int offset=0;
+	for(int i=0;i<imHeight;i++)
+		for(int j=0;j<imWidth;j++)
+			for(int k=0;k<nChannels;k++)
+				pMatlabPlane[k*nPixels+j*imHeight+i]=pData[offset++];
+}
+
+template <class T>
+void Image<T>::OutputToMatlab(mxArray *&matrix) const
+{
+	int dims[3];
+	dims[0]=imHeight;
+	dims[1]=imWidth;
+	dims[2]=nChannels;
+	int nDims;
+	nDims = (nChannels ==1)? 2:3;
+	if(typeid(T) == typeid(unsigned char))
+		matrix=mxCreateNumericArray(nDims, dims,mxUINT8_CLASS, mxREAL);
+	if(typeid(T) == typeid(char))
+		matrix=mxCreateNumericArray(nDims, dims,mxINT8_CLASS, mxREAL);
+	if(typeid(T) == typeid(short int))
+		matrix=mxCreateNumericArray(nDims, dims,mxINT16_CLASS, mxREAL);
+	if(typeid(T) == typeid(unsigned short int))
+		matrix=mxCreateNumericArray(nDims, dims,mxUINT16_CLASS, mxREAL);
+	if(typeid(T) == typeid(int))
+		matrix=mxCreateNumericArray(nDims, dims,mxINT32_CLASS, mxREAL);
+	if(typeid(T) == typeid(unsigned int))
+		matrix=mxCreateNumericArray(nDims, dims,mxUINT32_CLASS, mxREAL);
+	if(typeid(T) == typeid(float))
+		matrix=mxCreateNumericArray(nDims, dims,mxSINGLE_CLASS, mxREAL);
+	if(typeid(T) == typeid(float))
+		matrix=mxCreateNumericArray(nDims, dims,mxfloat_CLASS, mxREAL);
+
+	ConvertToMatlab<T>((T*)mxGetData(matrix));
+}
+
+#endif
+
