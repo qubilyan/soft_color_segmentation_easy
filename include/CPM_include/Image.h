@@ -2941,3 +2941,167 @@ void Image<T>::warpImageBicubicRef(const Image<T>& ref,Image<T>& output,const Im
 			float dy2 = dy*dy;
 			float dx3 = dx*dx2;
 			float dy3 = dy*dy2;
+
+
+			for(int k = 0;k<nChannels;k++)
+			{
+				// load the coefficients
+				for(int ii = 0;ii<4;ii++)
+					for(int jj=0;jj<4;jj++)
+						a[ii][jj] = coeff.pData[(offset*nChannels+k)*16+ii*4+jj];
+
+
+				// now use the coefficients for interpolation
+				output.pData[offset*nChannels+k] = a[0][0] +          a[0][1]*dy +          a[0][2]*dy2 +           a[0][3]*dy3+
+					                                                                    a[1][0]*dx +   a[1][1]*dx*dy   + a[1][2]*dx*dy2   + a[1][3]*dx*dy3 + 
+																						a[2][0]*dx2 + a[2][1]*dx2*dy + a[2][2]*dx2*dy2 + a[2][3]*dx2*dy3+
+																						a[3][0]*dx3 + a[3][1]*dx3*dy + a[3][2]*dx3*dy2 + a[3][3]*dx3*dy3;
+				//output.pData[offset*nChannels+k] = __max(__min(output.pData[offset*nChannels+k],ImgMax),0);
+				//if(!(output.pData[offset*nChannels+k]<100000 && output.pData[offset*nChannels+k]>-100000)) // bound the values
+				//	output.pData[offset*nChannels+k] = ref.pData[offset*nChannels+k];
+
+			}
+		}
+}
+
+
+
+
+
+template <class T>
+template <class T1>
+void Image<T>::warpImage(Image<T> &output, const Image<T1>& vx, const Image<T1>& vy) const
+{
+	if(!output.matchDimension(*this))
+		output.allocate(*this);
+	ImageProcessing::warpImage(output.data(),pData,vx.data(),vy.data(),imWidth,imHeight,nChannels);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImage_transpose(Image<T> &output, const Image<T1>& vx, const Image<T1>& vy) const
+{
+	if(!output.matchDimension(*this))
+		output.allocate(*this);
+	ImageProcessing::warpImage_transpose(output.data(),pData,vx.data(),vy.data(),imWidth,imHeight,nChannels);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImage(Image<T> &output, const Image<T1>& flow) const
+{
+	if(!output.matchDimension(*this))
+		output.allocate(*this);
+	ImageProcessing::warpImage(output.data(),pData,flow.data(),imWidth,imHeight,nChannels);
+}
+
+template <class T>
+template <class T1>
+void Image<T>::warpImage_transpose(Image<T> &output, const Image<T1>& flow) const
+{
+	if(!output.matchDimension(*this))
+		output.allocate(*this);
+	ImageProcessing::warpImage_transpose(output.data(),pData,flow.data(),imWidth,imHeight,nChannels);
+}
+
+template <class T>
+T Image<T>::maximum() const
+{
+	T Max = pData[0];
+	for(int i = 0;i<nElements; i++)
+		Max = __max(Max,pData[i]);
+	return Max;
+}
+
+template <class T>
+T Image<T>::minimum() const
+{
+	T Min = pData[0];
+	for(int i = 0;i<nElements;i++)
+		Min = __min(Min,pData[i]);
+	return Min;
+}
+
+#ifdef _MATLAB
+
+template <class T>
+template <class T1>
+void Image<T>::LoadMatlabImageCore(const mxArray *image,bool IsImageScaleCovnersion)
+{
+	int nDim = mxGetNumberOfDimensions(image);
+	const int* imDim = mxGetDimensions(image);
+	if(nDim==2)
+		allocate(imDim[1],imDim[0]);
+	else if(nDim==3)
+		allocate(imDim[1],imDim[0],imDim[2]);
+	else
+		mexErrMsgTxt("The image doesn't have the appropriate dimension!");
+	T1* pMatlabPlane=(T1*)mxGetData(image);
+	bool IsMatlabFloat;
+	if(typeid(T1)==typeid(float) || typeid(T1)==typeid(float) || typeid(T1)==typeid(long float))
+		IsMatlabFloat=true;
+	else
+		IsMatlabFloat=false;
+	bool isfloat=IsFloat();
+	if(isfloat==IsMatlabFloat || IsImageScaleCovnersion==false)
+	{
+		ConvertFromMatlab<T1>(pMatlabPlane,imWidth,imHeight,nChannels);
+		return;
+	}
+	int offset=0;
+	if(isfloat==true)
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+				for(int k=0;k<nChannels;k++)
+					pData[offset++]=(float)pMatlabPlane[k*nPixels+j*imHeight+i]/255;
+	else
+		for(int i=0;i<imHeight;i++)
+			for(int j=0;j<imWidth;j++)
+				for(int k=0;k<nChannels;k++)
+					pData[offset++]=(float)pMatlabPlane[k*nPixels+j*imHeight+i]*255;
+}
+
+template <class T>
+bool Image<T>::LoadMatlabImage(const mxArray* matrix,bool IsImageScaleCovnersion)
+{
+	colorType = RGB; // the color is RGB when we use matlab to load the image
+	if(mxIsClass(matrix,"uint8"))
+	{
+		LoadMatlabImageCore<unsigned char>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"int8"))
+	{
+		LoadMatlabImageCore<char>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"int32"))
+	{
+		LoadMatlabImageCore<int>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"uint32"))
+	{
+		LoadMatlabImageCore<unsigned int>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"int16"))
+	{
+		LoadMatlabImageCore<short int>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"uint16"))
+	{
+		LoadMatlabImageCore<unsigned short int>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"single"))
+	{
+		LoadMatlabImageCore<float>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
+	if(mxIsClass(matrix,"float"))
+	{
+		LoadMatlabImageCore<float>(matrix,IsImageScaleCovnersion);
+		return true;
+	}
