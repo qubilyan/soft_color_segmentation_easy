@@ -314,3 +314,134 @@ void ImageProcessing::ResizeImage(const T1 *pSrcImage, T2 *pDstImage, int SrcWid
 		for (int i = 0; i < DstHeight; i++)
 			for (int j = 0; j < DstWidth; j++)
 			{
+				x = (float)(j + 1) / xRatio - 1;
+				y = (float)(i + 1) / yRatio - 1;
+
+				// bilinear interpolation
+				BilinearInterpolate(pSrcImage, SrcWidth, SrcHeight, nChannels, x, y, pDstImage + (i*DstWidth + j)*nChannels);
+			}
+	}else if (type == INTER_NN){
+		int ix, iy;
+		for (int i = 0; i < DstHeight; i++)
+			for (int j = 0; j < DstWidth; j++)
+			{
+				x = (float)(j + 1) / xRatio - 1;
+				y = (float)(i + 1) / yRatio - 1;
+				ix = EnforceRange(x + 0.5, SrcWidth);
+				iy = EnforceRange(y + 0.5, SrcHeight);
+
+				// nearest neighbor interpolation
+				for (int c = 0; c < nChannels; c++){
+					pDstImage[(i*DstWidth + j)*nChannels + c] = pSrcImage[(iy*SrcWidth + ix)*nChannels + c];
+				}
+			}
+	}
+}
+
+//------------------------------------------------------------------------------------------------------------
+//  horizontal direction filtering
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::hfiltering(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter1D,int fsize)
+{
+	memset(pDstImage,0,sizeof(T2)*width*height*nChannels);
+	T2* pBuffer;
+	float w;
+	int i,j,l,k,offset,jj;
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			offset=i*width*nChannels;
+			pBuffer=pDstImage+offset+j*nChannels;
+			for(l=-fsize;l<=fsize;l++)
+			{
+				w=pfilter1D[l+fsize];
+				jj=EnforceRange(j+l,width);
+				for(k=0;k<nChannels;k++)
+					pBuffer[k]+=pSrcImage[offset+jj*nChannels+k]*w;
+			}
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+//  horizontal direction filtering transpose
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::hfiltering_transpose(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter1D,int fsize)
+{
+	memset(pDstImage,0,sizeof(T2)*width*height*nChannels);
+	const T1* pBuffer;
+	float w;
+	int i,j,l,k,offset,jj;
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			int offset0=i*width*nChannels;
+			pBuffer=pSrcImage+(i*width+j)*nChannels;
+			for(l=-fsize;l<=fsize;l++)
+			{
+				w=pfilter1D[l+fsize];
+				jj=EnforceRange(j+l,width);
+				offset = offset0 + jj*nChannels;
+				for(k=0;k<nChannels;k++)
+					pDstImage[offset+k] += pBuffer[k]*w;
+			}
+		}
+}
+//------------------------------------------------------------------------------------------------------------
+// fast filtering algorithm for laplacian
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::Laplacian(const T1 *pSrcImage, T2 *pDstImage, int width, int height, int nChannels)
+{
+	int LineWidth=width*nChannels;
+	int nElements=width*height*nChannels;
+	// first treat the corners
+	for(int k=0;k<nChannels;k++)
+	{
+		pDstImage[k]=pSrcImage[k]*2-pSrcImage[nChannels+k]-pSrcImage[LineWidth+k];
+		pDstImage[LineWidth-nChannels+k]=pSrcImage[LineWidth-nChannels+k]*2-pSrcImage[LineWidth-2*nChannels+k]-pSrcImage[2*LineWidth-nChannels+k];
+		pDstImage[nElements-LineWidth+k]=pSrcImage[nElements-LineWidth+k]*2-pSrcImage[nElements-LineWidth+nChannels+k]-pSrcImage[nElements-2*LineWidth+k];
+		pDstImage[nElements-nChannels+k]=pSrcImage[nElements-nChannels+k]*2-pSrcImage[nElements-2*nChannels+k]-pSrcImage[nElements-LineWidth-nChannels+k];
+	}
+	// then treat the borders
+	for(int i=1;i<width-1;i++)
+		for(int k=0;k<nChannels;k++)
+		{
+			pDstImage[i*nChannels+k]=pSrcImage[i*nChannels+k]*3-pSrcImage[(i-1)*nChannels+k]-pSrcImage[(i+1)*nChannels+k]-pSrcImage[i*nChannels+LineWidth+k];
+			pDstImage[nElements-LineWidth+i*nChannels+k]=pSrcImage[nElements-LineWidth+i*nChannels+k]*3-pSrcImage[nElements-LineWidth+(i-1)*nChannels+k]-pSrcImage[nElements-LineWidth+(i+1)*nChannels+k]-pSrcImage[nElements-2*LineWidth+i*nChannels+k];
+		}
+	for(int i=1;i<height-1;i++)
+		for(int k=0;k<nChannels;k++)
+		{
+			pDstImage[i*LineWidth+k]=pSrcImage[i*LineWidth+k]*3-pSrcImage[i*LineWidth+nChannels+k]-pSrcImage[(i-1)*LineWidth+k]-pSrcImage[(i+1)*LineWidth+k];
+			pDstImage[(i+1)*LineWidth-nChannels+k]=pSrcImage[(i+1)*LineWidth-nChannels+k]*3-pSrcImage[(i+1)*LineWidth-2*nChannels+k]-pSrcImage[i*LineWidth-nChannels+k]-pSrcImage[(i+2)*LineWidth-nChannels+k];
+		}
+	// now the interior
+	for(int i=1;i<height-1;i++)
+		for(int j=1;j<width-1;j++)
+		{
+			int offset=(i*width+j)*nChannels;
+			for(int k=0;k<nChannels;k++)
+				pDstImage[offset+k]=pSrcImage[offset+k]*4-pSrcImage[offset+nChannels+k]-pSrcImage[offset-nChannels+k]-pSrcImage[offset-LineWidth+k]-pSrcImage[offset+LineWidth+k];
+		}
+}
+
+template <class T1, class T2>
+void ImageProcessing::Medianfiltering(const T1* pSrcImage, T2* pDstImage, int width, int height, int nChannels, int fsize)
+{
+	T2* tmpImg = new T2[width*height*nChannels];
+
+	int regionSize = (2 * fsize + 1) * (2 * fsize + 1);
+	T1* pTmpSrc = (T1*)malloc(regionSize * sizeof(T1));
+	T2* pBuffer = NULL;
+	float w;
+	int i, j, l, k, c, offset, ii, jj;
+	for (i = 0; i < height; i++){
+		for (j = 0; j < width; j++){
+			pBuffer = tmpImg + (i*width + j)*nChannels;
+			for (c = 0; c < nChannels; c++){
+				int idx = 0;
+				for (l = -fsize; l <= fsize; l++){
+					for (k = -fsize; k <= fsize; k++){
+						ii = EnforceRange(i + l, height);
