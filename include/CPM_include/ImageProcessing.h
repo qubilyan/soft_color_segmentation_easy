@@ -718,3 +718,145 @@ void ImageProcessing::warpImage(T1 *pWarpIm2, const T1 *pIm1, const T1 *pIm2, co
 			{
 				for(int k=0;k<nChannels;k++)
 					pWarpIm2[offset+k]=pIm1[offset+k];
+				continue;
+			}
+			BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+		}
+}
+
+template <class T1,class T2>
+void ImageProcessing::warpImageFlow(T1 *pWarpIm2, const T1 *pIm1, const T1 *pIm2, const T2 *pFlow, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+pFlow[offset*2+1];
+			x=j+pFlow[offset*2];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+			{
+				for(int k=0;k<nChannels;k++)
+					pWarpIm2[offset+k]=pIm1[offset+k];
+				continue;
+			}
+			BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+		}
+}
+
+template <class T1,class T2>
+void ImageProcessing::warpImage(T1 *pWarpIm2,const T1 *pIm2, const T2 *pVx, const T2 *pVy, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+pVy[offset];
+			x=j+pVx[offset];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+				continue;
+			BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+		}
+}
+
+template <class T1,class T2>
+void ImageProcessing::warpImage_transpose(T1 *pWarpIm2,const T1 *pIm2, const T2 *pVx, const T2 *pVy, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+pVy[offset];
+			x=j+pVx[offset];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+				continue;
+			//BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+			BilinearInterpolate_transpose(pIm2+offset,width,height,nChannels,x,y,pWarpIm2);
+		}
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
+// different format
+//////////////////////////////////////////////////////////////////////////////////////
+template <class T1,class T2>
+void ImageProcessing::warpImage(T1 *pWarpIm2,const T1 *pIm2, const T2 *flow, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+flow[offset*2+1];
+			x=j+flow[offset*2];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+				continue;
+			BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+		}
+}
+
+template <class T1,class T2>
+void ImageProcessing::warpImage_transpose(T1 *pWarpIm2,const T1 *pIm2, const T2 *flow, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+flow[offset*2+1];
+			x=j+flow[offset*2];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+				continue;
+			//BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+			BilinearInterpolate_transpose(pIm2+offset,width,height,nChannels,x,y,pWarpIm2);
+		}
+}
+
+
+template <class T1,class T2,class T3>
+void ImageProcessing::warpImage(T1 *pWarpIm2, T3* pMask,const T1 *pIm1, const T1 *pIm2, const T2 *pVx, const T2 *pVy, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+pVy[offset];
+			x=j+pVx[offset];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+			{
+				for(int k=0;k<nChannels;k++)
+					pWarpIm2[offset+k]=pIm1[offset+k];
+				pMask[i*width+j]=0;
+				continue;
+			}
+			pMask[i*width+j]=1;
+			BilinearInterpolate(pIm2,width,height,nChannels,x,y,pWarpIm2+offset);
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+// function to crop an image from the source
+// assume that pDstImage has been allocated
+// also Left and Top must be valid, DstWidth and DstHeight should ensure that the image lies
+// inside the image boundary
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::cropImage(const T1 *pSrcImage, int SrcWidth, int SrcHeight, int nChannels, T2 *pDstImage, int Left, int Top, int DstWidth, int DstHeight)
+{
+	if(typeid(T1)==typeid(T2))
+	{
+		for(int i=0;i<DstHeight;i++)
