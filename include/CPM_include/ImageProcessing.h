@@ -179,3 +179,138 @@ void ImageProcessing::BGR2Lab(T1* pSrcImage, T2* pDstImage, int width, int heigh
 		pLab[1] = (pLab[1] + 110) / 220.;
 		pLab[2] = (pLab[2] + 110) / 220.;
 #endif
+		//
+		pBGR += 3;
+		pLab += 3;
+	}
+}
+
+//--------------------------------------------------------------------------------------------------
+// function to interpolate multi-channel image plane for (x,y)
+// --------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+inline void ImageProcessing::BilinearInterpolate(const T1* pImage,int width,int height,int nChannels,float x,float y,T2* result)
+{
+	int xx,yy,m,n,u,v,l,offset;
+	xx=x;
+	yy=y;
+	float dx,dy,s;
+	dx=__max(__min(x-xx,1),0);
+	dy=__max(__min(y-yy,1),0);
+
+	memset(result, 0, sizeof(T2)*nChannels);
+	for(m=0;m<=1;m++)
+		for(n=0;n<=1;n++)
+		{
+			u=EnforceRange(xx+m,width);
+			v=EnforceRange(yy+n,height);
+			offset=(v*width+u)*nChannels;
+			s=fabs(1-m-dx)*fabs(1-n-dy);
+			for(l=0;l<nChannels;l++)
+				result[l]+=pImage[offset+l]*s;
+		}
+}
+
+template <class T1>
+inline T1 ImageProcessing::BilinearInterpolate(const T1* pImage,int width,int height,float x,float y)
+{
+	int xx,yy,m,n,u,v,l,offset;
+	xx=x;
+	yy=y;
+	float dx,dy,s;
+	dx=__max(__min(x-xx,1),0);
+	dy=__max(__min(y-yy,1),0);
+
+	T1 result=0;
+	for(m=0;m<=1;m++)
+		for(n=0;n<=1;n++)
+		{
+			u=EnforceRange(xx+m,width);
+			v=EnforceRange(yy+n,height);
+			offset=v*width+u;
+			s=fabs(1-m-dx)*fabs(1-n-dy);
+			result+=pImage[offset]*s;
+		}
+	return result;
+}
+
+
+//--------------------------------------------------------------------------------------------------
+// function to interpolate multi-channel image plane for (x,y)
+// --------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+inline void ImageProcessing::BilinearInterpolate_transpose(const T1* pInput,int width,int height,int nChannels,float x,float y,T2* pDstImage)
+{
+	int xx,yy,m,n,u,v,l,offset;
+	xx=x;
+	yy=y;
+	float dx,dy,s;
+	dx=__max(__min(x-xx,1),0);
+	dy=__max(__min(y-yy,1),0);
+
+	for(m=0;m<=1;m++)
+		for(n=0;n<=1;n++)
+		{
+			u=EnforceRange(xx+m,width);
+			v=EnforceRange(yy+n,height);
+			offset=(v*width+u)*nChannels;
+			s=fabs(1-m-dx)*fabs(1-n-dy);
+			for(l=0;l<nChannels;l++)
+				pDstImage[offset+l] += pInput[l]*s;
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+// this is the most general function for resizing an image with a varying nChannels
+// bilinear interpolation is used for now. It might be replaced by other (bicubic) interpolation methods
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::ResizeImage(const T1* pSrcImage, T2* pDstImage, int SrcWidth, int SrcHeight, int nChannels, float Ratio, InterType type/* = INTER_LINEAR*/)
+{
+	int DstWidth,DstHeight;
+	DstWidth=(float)SrcWidth*Ratio;
+	DstHeight=(float)SrcHeight*Ratio;
+	memset(pDstImage,0,sizeof(T2)*DstWidth*DstHeight*nChannels);
+
+	float x,y;
+
+	if (type == INTER_LINEAR){
+		for (int i = 0; i < DstHeight; i++)
+			for (int j = 0; j < DstWidth; j++)
+			{
+				x = (float)(j + 1) / Ratio - 1;
+				y = (float)(i + 1) / Ratio - 1;
+
+				// bilinear interpolation
+				BilinearInterpolate(pSrcImage, SrcWidth, SrcHeight, nChannels, x, y, pDstImage + (i*DstWidth + j)*nChannels);
+			}
+	}else if (type == INTER_NN){
+		int ix, iy;
+		for (int i = 0; i < DstHeight; i++)
+			for (int j = 0; j < DstWidth; j++)
+			{
+				x = (float)(j + 1) / Ratio - 1;
+				y = (float)(i + 1) / Ratio - 1;
+				ix = EnforceRange(x + 0.5, SrcWidth);
+				iy = EnforceRange(y + 0.5, SrcHeight);
+				// nearest neighbor interpolation
+				for (int c = 0; c < nChannels; c++){
+					pDstImage[(i*DstWidth + j)*nChannels + c] = pSrcImage[(iy*SrcWidth + ix)*nChannels + c];
+				}
+			}
+	}
+}
+
+template <class T1,class T2>
+void ImageProcessing::ResizeImage(const T1 *pSrcImage, T2 *pDstImage, int SrcWidth, int SrcHeight, int nChannels, int DstWidth, int DstHeight, InterType type/* = INTER_LINEAR*/)
+{
+	float xRatio=(float)DstWidth/SrcWidth;
+	float yRatio=(float)DstHeight/SrcHeight;
+	memset(pDstImage, 0, sizeof(T2)*DstWidth*DstHeight*nChannels);
+
+	float x,y;
+
+	if (type == INTER_LINEAR){
+		for (int i = 0; i < DstHeight; i++)
+			for (int j = 0; j < DstWidth; j++)
+			{
