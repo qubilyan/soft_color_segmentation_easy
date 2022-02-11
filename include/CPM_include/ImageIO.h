@@ -187,3 +187,149 @@ cv::Mat ImageIO::CvmatFromPixels(const T* pImagePlane, int width, int height, in
 			int offset1 = i*width*nchannels;
 			int offset2 = i*im.step;
 			for (int j = 0; j < im.step; j++)
+			{
+				switch (imtype){
+				case standard:
+					if (IsFloat)
+						im.data[offset2 + j] = pImagePlane[offset1 + j] * 255;
+					else
+						im.data[offset2 + j] = __max(__min(pImagePlane[offset1 + j], 255), 0);
+					break;
+				case derivative:
+				case normalized:
+					im.data[offset2 + j] = ((double)pImagePlane[offset1 + j] - Min) / (Max - Min) * 255;
+					break;
+				}
+			}
+		}
+	}
+
+	// show range
+	if (imtype == derivative || imtype == normalized){
+		char info[256];
+		if (IsFloat)
+			sprintf(info, "[%.3f, %.3f]", Min, Max);
+		else
+			sprintf(info, "[%d, %d]", (int)Min, (int)Max);
+		cv::putText(im, info, cvPoint(10, 20), CV_FONT_HERSHEY_SIMPLEX, 0.5, cvScalar(255, 255, 255));
+	}
+
+	return im;
+}
+
+template <class T>
+void ImageIO::CvmatToPixels(const cv::Mat& cvInImg, T*& pOutImagePlane, int& width, int& height, int& nchannels)
+{
+	if (cvInImg.data == NULL) // if allocation fails
+		return;
+	if (cvInImg.type() != CV_8UC1 && cvInImg.type() != CV_8UC3 && cvInImg.type() != CV_8UC4) // we only support three types of image information for now
+		return;
+	width = cvInImg.size().width;
+	height = cvInImg.size().height;
+	nchannels = cvInImg.channels();
+
+	if (typeid(T) == typeid(unsigned char))
+	{
+		for (int i = 0; i < height; i++)
+			memcpy(pOutImagePlane + i*cvInImg.step, cvInImg.data + i*cvInImg.step, width*nchannels);
+		return;
+	}
+
+	// check whether the type is float point
+	bool IsFloat = false;
+	if (typeid(T) == typeid(double) || typeid(T) == typeid(float) || typeid(T) == typeid(long double))
+		IsFloat = true;
+
+	for (int i = 0; i < height; i++)
+	{
+		int offset1 = i*width*nchannels;
+		int offset2 = i*cvInImg.step;
+		for (int j = 0; j < width*nchannels; j++)
+		{
+			if (IsFloat)
+				pOutImagePlane[offset1 + j] = (T)cvInImg.data[offset2 + j] / 255;
+			else
+				pOutImagePlane[offset1 + j] = cvInImg.data[offset2 + j];
+		}
+	}
+	return;
+}
+
+/*
+#include <QVector>
+#include <QImage>
+#include <QString>
+#include "math.h"
+//-----------------------------------------------------------------------------------------
+// this class is a wrapper to use QImage to load image into image planes
+//-----------------------------------------------------------------------------------------
+
+class ImageIO
+{
+public:
+	enum ImageType{standard, derivative, normalized};
+	ImageIO(void);
+	~ImageIO(void);
+public:
+	template <class T>
+	static void loadImage(const QImage& image,T*& pImagePlane,int& width,int& height,int& nchannels);
+	template <class T>
+	static bool loadImage(const QString& filename,T*& pImagePlane,int& width,int& height,int& nchannels);
+
+	template <class T>
+	static unsigned char convertPixel(const T& value,bool IsFloat,ImageType type,T& _Max,T& _Min);
+
+	template <class T>
+	static bool writeImage(const QString& filename, const T*& pImagePlane,int width,int height,int nchannels,ImageType type=standard,int quality=-1);
+
+	template <class T>
+	static bool writeImage(const QString& filename,const T* pImagePlane,int width,int height,int nchannels,T min, T max,int quality=-1);
+
+};
+
+template <class T>
+void ImageIO::loadImage(const QImage& image, T*& pImagePlane,int& width,int& height,int& nchannels)
+{
+	// get the image information
+	width=image.width();
+	height=image.height();
+	nchannels=3;
+	pImagePlane=new T[width*height*nchannels];
+
+	// check whether the type is float point
+	bool IsFloat=false;
+	if(typeid(T)==typeid(double) || typeid(T)==typeid(float) || typeid(T)==typeid(long double))
+		IsFloat=true;
+
+	const unsigned char* plinebuffer;
+	for(int i=0;i<height;i++)
+	{
+		plinebuffer=image.scanLine(i);
+		for(int j=0;j<width;j++)
+		{
+			if(IsFloat)
+			{
+				pImagePlane[(i*width+j)*3]=(T)plinebuffer[j*4]/255;
+				pImagePlane[(i*width+j)*3+1]=(T)plinebuffer[j*4+1]/255;
+				pImagePlane[(i*width+j)*3+2]=(T)plinebuffer[j*4+2]/255;
+			}
+			else
+			{
+				pImagePlane[(i*width+j)*3]=plinebuffer[j*4];
+				pImagePlane[(i*width+j)*3+1]=plinebuffer[j*4+1];
+				pImagePlane[(i*width+j)*3+2]=plinebuffer[j*4+2];
+			}
+		}
+	}
+}
+
+template <class T>
+bool ImageIO::loadImage(const QString&filename, T*& pImagePlane,int& width,int& height,int& nchannels)
+{
+	QImage image;
+	if(image.load(filename)==false)
+		return false;
+	if(image.format()!=QImage::Format_RGB32)
+	{
+		QImage temp=image.convertToFormat(QImage::Format_RGB32);
+		image=temp;
