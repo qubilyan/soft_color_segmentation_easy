@@ -445,3 +445,130 @@ void ImageProcessing::Medianfiltering(const T1* pSrcImage, T2* pDstImage, int wi
 				for (l = -fsize; l <= fsize; l++){
 					for (k = -fsize; k <= fsize; k++){
 						ii = EnforceRange(i + l, height);
+						jj = EnforceRange(j + k, width);
+						pTmpSrc[idx++] = pSrcImage[(ii*width + jj)*nChannels + c];
+					}
+				}
+				// debug
+				// 				printf("\n");
+				// 				for(int kk=0; kk<regionSize; kk++){
+				// 					printf("%f ", pTmpSrc[kk]);
+				// 				}
+				sort(pTmpSrc, pTmpSrc + regionSize);
+				// debug
+				// 				printf("\n");
+				// 				for(int kk=0; kk<regionSize; kk++){
+				// 					printf("%f ", pTmpSrc[kk]);
+				// 				}
+				pBuffer[c] = pTmpSrc[regionSize / 2];
+			}
+		}
+	}
+	free(pTmpSrc);
+
+	memcpy(pDstImage, tmpImg, width*height*nChannels*sizeof(T2));
+	delete[] tmpImg;
+}
+
+//------------------------------------------------------------------------------------------------------------
+// vertical direction filtering
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::vfiltering(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter1D,int fsize)
+{
+	memset(pDstImage,0,sizeof(T2)*width*height*nChannels);
+	T2* pBuffer;
+	float w;
+	int i,j,l,k,offset,ii;
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			pBuffer=pDstImage+(i*width+j)*nChannels;
+			for(l=-fsize;l<=fsize;l++)
+			{
+				w=pfilter1D[l+fsize];
+				ii=EnforceRange(i+l,height);
+				for(k=0;k<nChannels;k++)
+					pBuffer[k]+=pSrcImage[(ii*width+j)*nChannels+k]*w;
+			}
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+// vertical direction filtering transpose
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::vfiltering_transpose(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter1D,int fsize)
+{
+	memset(pDstImage,0,sizeof(T2)*width*height*nChannels);
+	const T1* pBuffer;
+	float w;
+	int i,j,l,k,offset,ii;
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			pBuffer=pSrcImage+(i*width+j)*nChannels;
+			for(l=-fsize;l<=fsize;l++)
+			{
+				w=pfilter1D[l+fsize];
+				ii=EnforceRange(i+l,height);
+				offset = (ii*width+j)*nChannels;
+				for(k=0;k<nChannels;k++)
+					//pBuffer[k]+=pSrcImage[(ii*width+j)*nChannels+k]*w;
+					pDstImage[offset+k] += pBuffer[k]*w;
+			}
+		}
+}
+
+
+//------------------------------------------------------------------------------------------------------------
+// 2d filtering
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::filtering(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter2D,int fsize)
+{
+	float w;
+	int i,j,u,v,k,ii,jj,wsize,offset;
+	wsize=fsize*2+1;
+	float* pBuffer=new float[nChannels];
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			for(k=0;k<nChannels;k++)
+				pBuffer[k]=0;
+			for(u=-fsize;u<=fsize;u++)
+				for(v=-fsize;v<=fsize;v++)
+				{
+					w=pfilter2D[(u+fsize)*wsize+v+fsize];
+					ii=EnforceRange(i+u,height);
+					jj=EnforceRange(j+v,width);
+					offset=(ii*width+jj)*nChannels;
+					for(k=0;k<nChannels;k++)
+						pBuffer[k]+=pSrcImage[offset+k]*w;
+				}
+			offset=(i*width+j)*nChannels;
+			for(k=0;k<nChannels;k++)
+				pDstImage[offset+k]=pBuffer[k];
+		}
+	delete []pBuffer;
+}
+
+//------------------------------------------------------------------------------------------------------------
+// 2d filtering transpose
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::filtering_transpose(const T1* pSrcImage,T2* pDstImage,int width,int height,int nChannels,const float* pfilter2D,int fsize)
+{
+	float w;
+	int i,j,u,v,k,ii,jj,wsize,offset;
+	wsize=fsize*2+1;
+	memset(pDstImage,0,sizeof(T2)*width*height*nChannels);
+	for(i=0;i<height;i++)
+		for(j=0;j<width;j++)
+		{
+			int offset0 = (i*width+j)*nChannels;
+			for(u=-fsize;u<=fsize;u++)
+				for(v=-fsize;v<=fsize;v++)
+				{
+					w=pfilter2D[(u+fsize)*wsize+v+fsize];
+					ii=EnforceRange(i+u,height);
