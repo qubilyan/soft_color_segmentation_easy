@@ -572,3 +572,149 @@ void ImageProcessing::filtering_transpose(const T1* pSrcImage,T2* pDstImage,int 
 				{
 					w=pfilter2D[(u+fsize)*wsize+v+fsize];
 					ii=EnforceRange(i+u,height);
+					jj=EnforceRange(j+v,width);
+					int offset=(ii*width+jj)*nChannels;
+					for(k=0;k<nChannels;k++)
+						pDstImage[offset+k]+=pSrcImage[offset0+k]*w;
+				}
+		}
+}
+
+
+template <class T1, class T2>
+void ImageProcessing::Integral(const T1* pSrcImage, T2* pDstImage, int width, int height, int nChannels)
+{
+#if 0
+	for (int i = 0; i < 10; i++){
+		for (int j = 0; j < 10; j++){
+			printf("%.2f ", pSrcImage[(i*width + j)*nChannels]);
+		}
+		printf("\n");
+	}
+#endif
+
+	int ti, tj;
+	double sum;
+	for (int k = 0; k < nChannels; k++)
+	{
+		for (int i = 0; i < height; i++){
+			for (int j = 0; j < width; j++){
+				sum = pSrcImage[(i*width + j)*nChannels + k];
+
+				ti = i - 1;
+				tj = j - 1;
+				if (tj >= 0){
+					sum += pDstImage[(i*width + tj)*nChannels + k];
+				}
+				if (ti >= 0){
+					sum += pDstImage[(ti*width + j)*nChannels + k];
+				}
+				if (ti >= 0 && tj >= 0){
+					sum -= pDstImage[(ti*width + tj)*nChannels + k];
+				}
+
+				pDstImage[(i*width + j)*nChannels + k] = sum;
+			}
+		}
+	}
+
+#if 0
+	printf("\n");
+	for (int i = 0; i < 10; i++){
+		for (int j = 0; j < 10; j++){
+			printf("%.2f ", pDstImage[(i*width + j)*nChannels]);
+		}
+		printf("\n");
+	}
+#endif
+}
+
+template <class T1, class T2>
+void ImageProcessing::BoxFilter(const T1* pSrcImage, T2* pDstImage, int width, int height, int nChannels, int r, bool norm)
+{
+	double* pBuffer = new double[width*height*nChannels];
+	Integral(pSrcImage, pBuffer, width, height, nChannels);
+
+	int ti, tj;
+	double sum;
+	int starti, startj, endi, endj;
+	for (int k = 0; k < nChannels; k++)
+	{
+		for (int i = 0; i < height; i++){
+			for (int j = 0; j < width; j++){
+				ti = EnforceRange(i + r, height);
+				tj = EnforceRange(j + r, width);
+				sum = pBuffer[(ti*width + tj)*nChannels + k];
+
+				starti = 0;
+				startj = 0;
+				endi = ti;
+				endj = tj;
+
+				ti = i - r - 1;
+				tj = j - r - 1;
+
+				if (ti >= 0){
+					sum -= pBuffer[(ti*width + endj)*nChannels + k];
+					starti = ti + 1;
+				}
+				if (tj >= 0){
+					sum -= pBuffer[(endi*width + tj)*nChannels + k];
+					startj = tj + 1;
+				}
+				if (ti >= 0 && tj >= 0){
+					sum += pBuffer[(ti*width + tj)*nChannels + k];
+				}
+
+				int cnt = 1;
+				if (norm){	// normalize
+					cnt = (endi - starti + 1)*(endj - startj + 1);
+				}
+
+				pDstImage[(i*width + j)*nChannels + k] = sum / cnt;
+			}
+		}
+	}
+	delete []pBuffer;
+}
+
+//------------------------------------------------------------------------------------------------------------
+// function to sample a patch from the source image
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::getPatch(const T1* pSrcImage,T2* pPatch,int width,int height,int nChannels,float x0,float y0,int wsize)
+{
+	// suppose pPatch has been allocated and cleared before calling the function
+	int wlength=wsize*2+1;
+	float x,y;
+	for(int i=-wsize;i<=wsize;i++)
+		for(int j=-wsize;j<=wsize;j++)
+		{
+			y=y0+i;
+			x=x0+j;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+				continue;
+			BilinearInterpolate(pSrcImage,width,height,nChannels,x,y,pPatch+((i+wsize)*wlength+j+wsize)*nChannels);
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+// function to warp an image with respect to flow field
+// pWarpIm2 has to be allocated before hands
+//------------------------------------------------------------------------------------------------------------
+template <class T1,class T2>
+void ImageProcessing::warpImage(T1 *pWarpIm2, const T1 *pIm1, const T1 *pIm2, const T2 *pVx, const T2 *pVy, int width, int height, int nChannels)
+{
+	memset(pWarpIm2,0,sizeof(T1)*width*height*nChannels);
+	for(int i=0;i<height;i++)
+		for(int j=0;j<width;j++)
+		{
+			int offset=i*width+j;
+			float x,y;
+			y=i+pVy[offset];
+			x=j+pVx[offset];
+			offset*=nChannels;
+			if(x<0 || x>width-1 || y<0 || y>height-1)
+			{
+				for(int k=0;k<nChannels;k++)
+					pWarpIm2[offset+k]=pIm1[offset+k];
