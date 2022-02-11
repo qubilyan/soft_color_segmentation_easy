@@ -860,3 +860,65 @@ void ImageProcessing::cropImage(const T1 *pSrcImage, int SrcWidth, int SrcHeight
 	if(typeid(T1)==typeid(T2))
 	{
 		for(int i=0;i<DstHeight;i++)
+			memcpy(pDstImage+i*DstWidth*nChannels,pSrcImage+((i+Top)*SrcWidth+Left)*nChannels,sizeof(T1)*DstWidth*nChannels);
+		return;
+	}
+	int offsetSrc,offsetDst;
+	for(int i=0;i<DstHeight;i++)
+		for(int j=0;j<DstWidth;j++)
+		{
+			offsetSrc=((i+Top)*SrcWidth+Left+j)*nChannels;
+			offsetDst=(i*DstWidth+j)*nChannels;
+			for(int k=0;k<nChannels;k++)
+				pDstImage[offsetDst+k]=pSrcImage[offsetSrc+k];
+		}
+}
+
+//------------------------------------------------------------------------------------------------------------
+// function to generate a 2D Gaussian image
+// pImage must be allocated before calling the function
+//------------------------------------------------------------------------------------------------------------
+template <class T>
+void ImageProcessing::generate2DGaussian(T*& pImage, int wsize, float sigma)
+{
+	if(sigma==-1)
+		sigma=wsize/2;
+	float alpha=1/(2*sigma*sigma);
+	int winlength=wsize*2+1;
+	if(pImage==NULL)
+		pImage=new T[winlength*winlength];
+	float total = 0;
+	for(int i=-wsize;i<=wsize;i++)
+		for(int j=-wsize;j<=wsize;j++)
+		{
+			pImage[(i+wsize)*winlength+j+wsize]=exp(-(float)(i*i+j*j)*alpha);
+			total += pImage[(i+wsize)*winlength+j+wsize];
+		}
+	for(int i = 0;i<winlength*winlength;i++)
+		pImage[i]/=total;
+}
+
+//------------------------------------------------------------------------------------------------------------
+// function to generate a 1D Gaussian image
+// pImage must be allocated before calling the function
+//------------------------------------------------------------------------------------------------------------
+template <class T>
+void ImageProcessing::generate1DGaussian(T*& pImage, int wsize, float sigma)
+{
+	if(sigma==-1)
+		sigma=wsize/2;
+	float alpha=1/(2*sigma*sigma);
+	int winlength=wsize*2+1;
+	if(pImage==NULL)
+		pImage=new T[winlength];
+	float total = 0;
+	for(int i=-wsize;i<=wsize;i++)
+	{
+		pImage[i+wsize]=exp(-(float)(i*i)*alpha);
+		total += pImage[i+wsize];
+	}
+	for(int i = 0;i<winlength;i++)
+		pImage[i]/=total;
+}
+
+#endif
