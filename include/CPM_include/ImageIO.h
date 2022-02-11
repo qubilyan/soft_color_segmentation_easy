@@ -333,3 +333,123 @@ bool ImageIO::loadImage(const QString&filename, T*& pImagePlane,int& width,int& 
 	{
 		QImage temp=image.convertToFormat(QImage::Format_RGB32);
 		image=temp;
+	}
+	loadImage(image,pImagePlane,width,height,nchannels);
+	return true;
+}
+
+template <class T>
+bool ImageIO::writeImage(const QString& filename, const T*& pImagePlane,int width,int height,int nchannels,ImageType type,int quality)
+{
+	int nPixels=width*height,nElements;
+	nElements=nPixels*nchannels;
+	unsigned char* pTempBuffer;
+	pTempBuffer=new unsigned char[nPixels*4];
+	memset(pTempBuffer,0,nPixels*4);
+
+	// check whether the type is float point
+	bool IsFloat=false;
+	if(typeid(T)==typeid(double) || typeid(T)==typeid(float) || typeid(T)==typeid(long double))
+		IsFloat=true;
+
+	T _Max=0,_Min=0;
+	switch(type){
+		case standard:
+			break;
+		case derivative:
+			_Max=0;
+			for(int i=0;i<nPixels;i++)
+			{
+				if(IsFloat)
+					_Max=__max(_Max,fabs((double)pImagePlane[i]));
+				else
+					_Max=__max(_Max,abs(pImagePlane[i]));
+			}
+			break;
+		case normalized:
+			_Min=_Max=pImagePlane[0];
+			for(int i=1;i<nElements;i++)
+			{
+				_Min=__min(_Min,pImagePlane[i]);
+				_Max=__max(_Max,pImagePlane[i]);
+			}
+			break;
+	}
+
+	for(int i=0;i<nPixels;i++)
+	{
+		if(nchannels>=3)
+		{
+			pTempBuffer[i*4]=convertPixel(pImagePlane[i*nchannels],IsFloat,type,_Max,_Min);
+			pTempBuffer[i*4+1]=convertPixel(pImagePlane[i*nchannels+1],IsFloat,type,_Max,_Min);
+			pTempBuffer[i*4+2]=convertPixel(pImagePlane[i*nchannels+2],IsFloat,type,_Max,_Min);
+		}
+		else 
+			for (int j=0;j<3;j++)
+				pTempBuffer[i*4+j]=convertPixel(pImagePlane[i*nchannels],IsFloat,type,_Max,_Min);
+		pTempBuffer[i*4+3]=255;
+	}
+	QImage *pQImage=new QImage(pTempBuffer,width,height,QImage::Format_RGB32);
+	bool result= pQImage->save(filename,0,quality);
+	delete pQImage;
+	delete pTempBuffer;
+	return result;
+}
+
+template <class T>
+bool ImageIO::writeImage(const QString& filename, const T* pImagePlane,int width,int height,int nchannels,T min,T max,int quality)
+{
+	int nPixels=width*height,nElements;
+	nElements=nPixels*nchannels;
+	unsigned char* pTempBuffer;
+	pTempBuffer=new unsigned char[nPixels*4];
+	memset(pTempBuffer,0,nPixels*4);
+
+	// check whether the type is float point
+	bool IsFloat=false;
+	if(typeid(T)==typeid(double) || typeid(T)==typeid(float) || typeid(T)==typeid(long double))
+		IsFloat=true;
+
+	T _Max=max,_Min=min;
+
+	for(int i=0;i<nPixels;i++)
+	{
+		if(nchannels>=3)
+		{
+			pTempBuffer[i*4]=convertPixel(pImagePlane[i*nchannels],IsFloat,normalized,_Max,_Min);
+			pTempBuffer[i*4+1]=convertPixel(pImagePlane[i*nchannels+1],IsFloat,normalized,_Max,_Min);
+			pTempBuffer[i*4+2]=convertPixel(pImagePlane[i*nchannels+2],IsFloat,normalized,_Max,_Min);
+		}
+		else 
+			for (int j=0;j<3;j++)
+				pTempBuffer[i*4+j]=convertPixel(pImagePlane[i*nchannels],IsFloat,normalized,_Max,_Min);
+		pTempBuffer[i*4+3]=255;
+	}
+	QImage *pQImage=new QImage(pTempBuffer,width,height,QImage::Format_RGB32);
+	bool result= pQImage->save(filename,0,quality);
+	delete pQImage;
+	delete pTempBuffer;
+	return result;
+}
+
+template <class T>
+unsigned char ImageIO::convertPixel(const T& value,bool IsFloat,ImageType type,T& _Max,T& _Min)
+{
+	switch(type){
+		case standard:
+			if(IsFloat)
+				return __max(__min(value*255,255),0);
+			else
+				return __max(__min(value,255),0);
+			break;
+		case derivative:
+			return (double)((double)value/_Max+1)/2*255;
+			break;
+		case normalized:
+			return (double)(value-_Min)/(_Max-_Min)*255;
+			break;
+	}
+	return 0;
+}
+//*/
+#endif
