@@ -231,3 +231,160 @@ int OpticFlowIO::ReadFlowFile(T* U, T* V, int* w, int* h, const char* filename)
 	const char *dot = strrchr(filename, '.');
 	if (strcmp(dot, ".flo") != 0){
 		printf("ReadFlowFile (%s): extension .flo expected\n", filename);
+		return -1;
+	}
+
+	FILE *stream = fopen(filename, "rb");
+	if (stream == 0){
+		printf("ReadFlowFile: could not open %s\n", filename);
+		return -1;
+	}
+
+	int width, height;
+	float tag;
+
+	if ((int)fread(&tag,    sizeof(float), 1, stream) != 1 
+		||(int)fread(&width,  sizeof(int),   1, stream) != 1 
+		||(int)fread(&height, sizeof(int),   1, stream) != 1)
+	{
+		printf("ReadFlowFile: problem reading file %s\n", filename);
+		return -1;
+	}
+
+	if (tag != TAG_FLOAT) // simple test for correct endian-ness
+	{
+		printf("ReadFlowFile(%s): wrong tag (possibly due to big-endian machine?)\n", filename);
+		return -1;
+	}
+
+	// another sanity check to see that integers were read correctly (99999 should do the trick...)
+	if (width < 1 || width > 99999){
+		printf("ReadFlowFile(%s): illegal width %d\n", filename, width);
+		return -1;
+	}
+
+	if (height < 1 || height > 99999){
+		printf("ReadFlowFile(%s): illegal height %d\n", filename, height);
+		return -1;
+	}
+
+	for(int i=0; i<height; i++){
+		for(int j=0; j<width; j++){
+			float tmp[NUM_BANDS];
+			if ((int)fread(tmp, sizeof(float), NUM_BANDS, stream) != NUM_BANDS){
+				printf("ReadFlowFile(%s): file is too short\n", filename);
+				return -1;
+			}
+			U[i*width+j] = tmp[0];
+			V[i*width+j] = tmp[1];
+		}
+	}
+
+	if (fgetc(stream) != EOF){
+		printf("ReadFlowFile(%s): file is too long\n", filename);
+		return -1;
+	}
+
+	*w = width;
+	*h = height;
+
+	fclose(stream);
+	return 0;
+}
+
+template <class T>
+int OpticFlowIO::WriteFlowFile(T* U, T* V, int w, int h, const char* filename)
+{
+	if (filename == NULL){
+		printf("WriteFlowFile: empty filename\n");
+		return -1;
+	}
+
+	const char *dot = strrchr(filename, '.');
+	if (dot == NULL){
+		printf("WriteFlowFile: extension required in filename '%s'\n", filename);
+		return -1;
+	}
+
+	if (strcmp(dot, ".flo") != 0){
+		printf("WriteFlowFile: filename '%s' should have extension '.flo'\n", filename);
+		return -1;
+	}
+
+	int width = w, height = h;
+
+	FILE *stream = fopen(filename, "wb");
+	if (stream == 0){
+		printf("WriteFlowFile: could not open %s\n", filename);
+		return -1;
+	}
+
+	// write the header
+	fprintf(stream, TAG_STRING);
+	if ((int)fwrite(&width,  sizeof(int),   1, stream) != 1 
+		||(int)fwrite(&height, sizeof(int),   1, stream) != 1)
+	{
+		printf("WriteFlowFile(%s): problem writing header\n", filename);
+		return -1;
+	}
+
+	// write the rows
+	for(int i=0; i<height; i++){
+		for(int j=0; j<width; j++){
+			float tmp[NUM_BANDS];
+			tmp[0] = U[i*width+j];
+			tmp[1] = V[i*width+j];
+			if ((int)fwrite(tmp, sizeof(float), NUM_BANDS, stream) != NUM_BANDS){
+				printf("WriteFlowFile(%s): problem writing data\n", filename);
+				return -1;
+			}
+		}
+	}
+
+	fclose(stream);
+	return 0;
+}
+
+template <class T>
+double OpticFlowIO::MotionToColor(unsigned char* fillPix, T* U, T* V, int w, int h, float range /*= -1*/)
+{
+	// determine motion range:
+	double maxrad;
+
+	if (range > 0) {
+		maxrad = range;
+	}else{	// obtain the motion range according to the max flow
+		double maxu = -999, maxv = -999;
+		double minu = 999, minv = 999;
+		maxrad = -1;
+		for (int i = 0; i < h; i++){
+			for (int j = 0; j < w; j++){
+				double u = U[i*w + j];
+				double v = V[i*w + j];
+				if (unknown_flow(u, v))
+					continue;
+				maxu = __max(maxu, u);
+				maxv = __max(maxv, v);
+				minu = __min(minu, u);
+				minv = __min(minv, v);
+				double rad = sqrt(u * u + v * v);
+				maxrad = __max(maxrad, rad);
+			}
+		}
+		if (maxrad == 0) // if flow == 0 everywhere
+			maxrad = 1;
+	}
+
+	//printf("max motion: %.2f  motion range: u = [%.2f,%.2f];  v = [%.2f,%.2f]\n",
+	//	maxrad, minu, maxu, minv, maxv);
+
+	int colorwheel[MAXWHEELCOLS*3];
+	int ncols = makecolorwheel(colorwheel);
+
+	for(int i=0; i<h; i++){
+		for(int j=0; j<w; j++){
+			int idx = i*w+j;
+			double u = U[idx];
+			double v = V[idx];
+			if (unknown_flow(u, v)){
+				memset(fillPix+idx*4, 0, 4);
