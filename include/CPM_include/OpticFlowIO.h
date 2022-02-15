@@ -550,3 +550,159 @@ float OpticFlowIO::ErrorImage(unsigned char* fillPix, T* u1, T* v1, T* u2, T* v2
 			float f_mag = sqrt(u2[idx] * u2[idx] + v2[idx] * v2[idx]);
 			float n_err = std::min(f_err / 3.0, 20.0*f_err / f_mag);
 			for (int i = 0; i < 10; i++) {
+				if (n_err >= LC[i][0] && n_err < LC[i][1]) {
+					pix[3] = 0xFF; // only for alignment
+					pix[2] = (uint8_t)LC[i][2];
+					pix[1] = (uint8_t)LC[i][3];
+					pix[0] = (uint8_t)LC[i][4];
+				}
+			}
+			if (unknown_flow(u1[idx], v1[idx]) || unknown_flow(u2[idx], v2[idx])) {
+				pix[2] *= 0.5;
+				pix[1] *= 0.5;
+				pix[0] *= 0.5;
+			}
+#else
+			float v = __min(endPtErr, 5.0) / 5.0;
+			//float v = __min(endPtErr, 3.0) / 3.0;
+			pix[0] = v * 255; pix[1] = v * 255; pix[2] = v * 255;
+			pix[3] = 0xFF; // only for alignment
+
+#if 1
+			if (endPtErr > 3.0){ // red
+				pix[0] = pix[1] = 0;
+				pix[2] = 255;
+			}
+#endif
+#endif
+			if (endPtErr < 3.0){
+				validCnt++;
+			}
+			memcpy(fillPix + idx * 4, pix, 4);
+			totalCnt++;
+		}
+	}
+	return 1. - (float)validCnt / totalCnt;
+}
+
+template <class T>
+float OpticFlowIO::ErrorImage(unsigned char* fillPix, T* u1, T* v1, char* gtName, int w, int h)
+{
+	int gtw, gth;
+	T* u2 = new T[w*h];
+	T* v2 = new T[w*h];
+	ReadFlowFile(u2, v2, &gtw, &gth, gtName);
+	assert(w == gtw&&h == gth);
+
+	float r = ErrorImage(fillPix, u1, v1, u2, v2, w, h);
+	delete[] u2;
+	delete[] v2;
+	return r;
+}
+
+template <class T>
+float OpticFlowIO::ShowErrorImage(const char* winname, T* U, T* V, char* gtName, int w, int h, int waittime /*= 1*/)
+{
+	cv::Mat img(h, w, CV_8UC4);
+	float r = OpticFlowIO::ErrorImage(img.data, U, V, gtName, w, h);
+
+	cv::imshow(winname, img);
+	cv::waitKey(waittime);
+
+	return r;
+}
+
+template <class T>
+float OpticFlowIO::SaveErrorImage(const char* imgName, T* U, T* V, char* gtName, int w, int h)
+{
+	cv::Mat img(h, w, CV_8UC4);
+	float r = OpticFlowIO::ErrorImage(img.data, U, V, gtName, w, h);
+
+	cv::imwrite(imgName, img);
+	return r;
+}
+
+template <class T1, class T2>
+FlowErr OpticFlowIO::CalcFlowError(T1* u1, T1* v1, T2* u2, T2*v2, int w, int h)
+{
+	FlowErr stat;
+	memset(&stat, 0, sizeof(stat));
+
+	double endPtErr = 0;
+	double angErr = 0;
+	int n = 0;
+	for(int i=0; i<h; i++){
+		for(int j=0; j<w; j++){
+			int idx = i*w+j;
+			if(unknown_flow(u1[idx], v1[idx]) || unknown_flow(u2[idx], v2[idx])){
+				continue;
+			}
+			endPtErr += sqrt(pow(u1[idx]-u2[idx],2)+pow(v1[idx]-v2[idx],2));
+
+			double tmp = (1.0+u1[idx]*u2[idx]+v1[idx]*v2[idx])
+				/(sqrt(1.0+pow(u1[idx],2)+pow(v1[idx],2))*sqrt(1.0+pow(u2[idx],2)+pow(v2[idx],2)));
+			
+			if(tmp < -1.0)	tmp = -1.0;
+			if(tmp > 1.0)	tmp = 1.0;
+
+			angErr += acos(tmp);
+			n++;
+		}
+	}
+
+	stat.aae = (angErr/n) * 180/M_PI;
+	stat.aee = endPtErr/n;
+
+	return stat;
+}
+
+template <class T>
+void OpticFlowIO::setcols(T* colorwheel, int r, int g, int b, int k)
+{
+	colorwheel[k*3+0] = r;
+	colorwheel[k*3+1] = g;
+	colorwheel[k*3+2] = b;
+}
+
+template <class T>
+int OpticFlowIO::makecolorwheel(T* colorwheel)
+{
+	// relative lengths of color transitions:
+	// these are chosen based on perceptual similarity
+	// (e.g. one can distinguish more shades between red and yellow 
+	//  than between yellow and green)
+	int RY = 15;
+	int YG = 6;
+	int GC = 4;
+	int CB = 11;
+	int BM = 13;
+	int MR = 6;
+	int ncols = RY + YG + GC + CB + BM + MR;
+	//printf("ncols = %d\n", ncols);
+	if (ncols > MAXWHEELCOLS){
+		printf("Too Many Columns in ColorWheel!\n");
+		//exit(1);
+	}
+	int i;
+	int k = 0;
+	for (i = 0; i < RY; i++) setcols(colorwheel, 255,	   255*i/RY,	 0,	       k++);
+	for (i = 0; i < YG; i++) setcols(colorwheel, 255-255*i/YG, 255,		 0,	       k++);
+	for (i = 0; i < GC; i++) setcols(colorwheel, 0,		   255,		 255*i/GC,     k++);
+	for (i = 0; i < CB; i++) setcols(colorwheel, 0,		   255-255*i/CB, 255,	       k++);
+	for (i = 0; i < BM; i++) setcols(colorwheel, 255*i/BM,	   0,		 255,	       k++);
+	for (i = 0; i < MR; i++) setcols(colorwheel, 255,	   0,		 255-255*i/MR, k++);
+
+	return ncols;
+}
+
+template <class T>
+void OpticFlowIO::computeColor(double fx, double fy, unsigned char *pix, T* colorwheel, int ncols)
+{
+	double rad = sqrt(fx * fx + fy * fy);
+	double a = atan2(-fy, -fx) / M_PI;
+	double fk = (a + 1.0) / 2.0 * (ncols-1);
+	int k0 = (int)fk;
+	int k1 = (k0 + 1) % ncols;
+	double f = fk - k0;
+	//f = 0; // uncomment to see original color wheel
+	for (int b = 0; b < 3; b++) {
