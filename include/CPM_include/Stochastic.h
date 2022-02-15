@@ -147,3 +147,132 @@ T CStochastic::Min(int NumData,T* pData1,T* pData2)
 		result=__min(result,pData1[i]+pData2[i]);
 	return result;
 }
+
+template <class T>
+T CStochastic::Max(int NumData,T* pData)
+{
+	int i;
+	T result=pData[0];
+	for(i=1;i<NumData;i++)
+		result=__max(result,pData[i]);
+	return result;
+}
+
+template <class T>
+int CStochastic::FindMax(int NumData,T* pData)
+{
+	int i,index;
+	T result=pData[0];
+	index=0;
+	for(i=1;i<NumData;i++)
+		if(pData[i]>result)
+		{
+			index=i;
+			result=pData[i];
+		}
+	return index;
+}
+
+
+template <class T1,class T2>
+void CStochastic::ComputeMeanCovariance(int Dim,int NumData,T1* pData,T2* pMean,T2* pCovariance,double* pWeight)
+{
+	int i,j,k;
+	memset(pMean,0,sizeof(T2)*Dim);
+	memset(pCovariance,0,sizeof(T2)*Dim*Dim);
+	
+	bool IsWeightLoaded=false;
+	double Sum;
+	if(pWeight!=NULL)
+		IsWeightLoaded=true;
+
+	// compute mean first
+	Sum=0;
+	if(IsWeightLoaded)
+		for(i=0;i<NumData;i++)
+		{
+			if(pWeight[i]==0)
+				continue;
+			for(j=0;j<Dim;j++)
+				pMean[j]+=pData[i*Dim+j]*pWeight[i];
+			Sum+=pWeight[i];
+		}
+	else
+	{
+		for(i=0;i<NumData;i++)
+			for(j=0;j<Dim;j++)
+				pMean[j]+=pData[i*Dim+j];
+		Sum=NumData;
+	}
+	for(j=0;j<Dim;j++)
+		pMean[j]/=Sum;
+
+	//compute covariance;
+	T2* pTempVector;
+	pTempVector=new T2[Dim];
+
+	for(i=0;i<NumData;i++)
+	{
+		for(j=0;j<Dim;j++)
+			pTempVector[j]=pData[i*Dim+j]-pMean[j];
+		if(IsWeightLoaded)
+		{
+			if(pWeight[i]==0)
+				continue;
+			for(j=0;j<Dim;j++)
+				for(k=0;k<=j;k++)
+					pCovariance[j*Dim+k]+=pTempVector[j]*pTempVector[k]*pWeight[i];
+		}
+		else
+			for(j=0;j<Dim;j++)
+				for(k=0;k<=j;k++)
+					pCovariance[j*Dim+k]+=pTempVector[j]*pTempVector[k];
+	}
+	for(j=0;j<Dim;j++)
+		for(k=j+1;k<Dim;k++)
+			pCovariance[j*Dim+k]=pCovariance[k*Dim+j];
+
+	for(j=0;j<Dim*Dim;j++)
+		pCovariance[j]/=Sum;
+
+	delete []pTempVector;
+}
+
+template <class T1,class T2>
+void CStochastic::ComputeVectorMean(int Dim,int NumData,T1* pData,T2* pMean,double* pWeight)
+{
+	int i,j;
+	memset(pMean,0,sizeof(T2)*Dim);
+	bool IsWeightLoaded;
+	double Sum;
+	if(pWeight=NULL)
+		IsWeightLoaded=false;
+	else
+		IsWeightLoaded=true;
+
+	Sum=0;
+	if(IsWeightLoaded)
+		for(i=0;i<NumData;i++)
+		{
+			if(pWeight[i]==0)
+				continue;
+			for(j=0;j<Dim;j++)
+				pMean[j]+=pData[i*Dim+j]*pWeight[i];
+			Sum+=pWeight[i];
+		}
+	else
+	{
+		for(i=0;i<NumData;i++)
+			for(j=0;j<Dim;j++)
+				pMean[j]+=pData[i*Dim+j];
+		Sum=NumData;
+	}
+	for(j=0;j<Dim;j++)
+		pMean[j]/=Sum;
+}
+
+template <class T1,class T2>
+double CStochastic::VectorSquareDistance(int Dim,T1* pVector1,T2* pVector2)
+{
+	double result=0,temp;
+	int i;
