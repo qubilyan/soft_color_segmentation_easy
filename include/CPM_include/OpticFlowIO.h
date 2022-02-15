@@ -706,3 +706,16 @@ void OpticFlowIO::computeColor(double fx, double fy, unsigned char *pix, T* colo
 	double f = fk - k0;
 	//f = 0; // uncomment to see original color wheel
 	for (int b = 0; b < 3; b++) {
+		double col0 = colorwheel[k0*3+b] / 255.0;
+		double col1 = colorwheel[k1*3+b] / 255.0;
+		double col = (1 - f) * col0 + f * col1;
+		if (rad <= 1)
+			col = 1 - rad * (1 - col); // increase saturation with radius
+		else
+			col *= .75; // out of range
+		pix[2 - b] = (int)(255.0 * col);
+	}
+	pix[3] = 0xff; // alpha channel, only for alignment
+}
+
+#endif //_OpticFlowIO_H
