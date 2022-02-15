@@ -388,3 +388,165 @@ double OpticFlowIO::MotionToColor(unsigned char* fillPix, T* U, T* V, int w, int
 			double v = V[idx];
 			if (unknown_flow(u, v)){
 				memset(fillPix+idx*4, 0, 4);
+				fillPix[idx*4 + 3] = 0xff; // alpha channel, only for alignment
+			}else{
+				double dx = __min(__max(u / maxrad, -1), 1);
+				double dy = __min(__max(v / maxrad, -1), 1);
+				computeColor(dx, dy, (unsigned char*)(fillPix + idx * 4), colorwheel, ncols);
+			}
+		}
+	}
+
+	return maxrad;
+}
+
+template <class T>
+float OpticFlowIO::ShowFlow(const char* winname, T* U, T* V, int w, int h, 
+	float range /*= -1*/, int waittime /*= 1*/)
+{
+	cv::Mat img(h, w, CV_8UC4);
+	float maxFlow = OpticFlowIO::MotionToColor(img.data, U, V, w, h, range);
+
+#if 0
+	// get corner color
+	int x = 10, y = 20;
+	unsigned char color[4];
+	unsigned char* pSrc = img.data + y*img.step + x * 4;
+	color[0] = 255 - pSrc[0];
+	color[1] = 255 - pSrc[1];
+	color[2] = 255 - pSrc[2];
+	char info[256];
+	sprintf(info, "max: %.1f", maxFlow);
+	cv::putText(img, info, cvPoint(x, y), CV_FONT_HERSHEY_SIMPLEX, 0.5, cvScalar(color[0], color[1], color[2]));
+#endif
+
+	cv::imshow(winname, img);
+	cv::waitKey(waittime);
+
+	return maxFlow;
+}
+
+template <class T>
+void OpticFlowIO::SaveFlowAsImage(const char* imgName, T* U, T* V, int w, int h, float range /*= -1*/)
+{
+	cv::Mat img(h, w, CV_8UC4);
+	float maxFlow = OpticFlowIO::MotionToColor(img.data, U, V, w, h, range);
+
+#if 1
+	// get corner color
+	int x = 10, y = 20;
+	unsigned char color[3];
+	unsigned char* pSrc = img.data + y*img.step + x * 4;
+	color[0] = 255 - pSrc[0];
+	color[1] = 255 - pSrc[1];
+	color[2] = 255 - pSrc[2];
+	char info[256];
+	sprintf(info, "max: %.1f", maxFlow);
+	cv::putText(img, info, cvPoint(x, y), CV_FONT_HERSHEY_SIMPLEX, 0.5, cvScalar(color[0], color[1], color[2]));
+#endif
+
+	cv::imwrite(imgName, img);
+}
+
+inline void OpticFlowIO::SaveFlowMatrixAsImage(const char* imgName, cv::Mat2f flowMat)
+{
+	int rows = flowMat.rows; int cols = flowMat.cols;
+	FImage tmp_u2 = FImage(cols, rows, 1);
+    FImage tmp_v2 = FImage(cols, rows, 1);
+    OpticFlowIO::FlowMatrix2Flow(flowMat, tmp_u2, tmp_v2);        
+    OpticFlowIO::SaveFlowAsImage(imgName, tmp_u2.pData, tmp_v2.pData, cols, rows);
+}
+
+// draw each match as a 3x3 color block
+inline void OpticFlowIO::Match2Flow(FImage& inMat, FImage& ou, FImage& ov, int w, int h)
+{
+	if (!ou.matchDimension(w, h, 1)){
+		ou.allocate(w, h, 1);
+	}
+	if (!ov.matchDimension(w, h, 1)){
+		ov.allocate(w, h, 1);
+	}
+	ou.setValue(UNKNOWN_FLOW);
+	ov.setValue(UNKNOWN_FLOW);
+	int cnt = inMat.height();
+	for (int i = 0; i < cnt; i++){
+		float* p = inMat.rowPtr(i);
+		float x = p[0];
+		float y = p[1];
+		float u = p[2] - p[0]; //x component of flow velocity
+		float v = p[3] - p[1]; //y component of flow velocity
+		for (int di = -1; di <= 1; di++){
+			for (int dj = -1; dj <= 1; dj++){
+				int tx = ImageProcessing::EnforceRange(x + dj, w);
+				int ty = ImageProcessing::EnforceRange(y + di, h);
+				ou[ty*w + tx] = u;
+				ov[ty*w + tx] = v;
+			}
+		}
+	}
+}
+
+
+// draw each match from a dense flow matrix inMat to a 1x1 color block
+inline void OpticFlowIO::FlowMatrix2Flow(cv::Mat2f inMat, FImage& ou, FImage& ov)
+{
+    int rows = inMat.rows;
+    int cols = inMat.cols;
+	if (!ou.matchDimension(cols, rows, 1)){
+		ou.allocate(cols, rows, 1);
+	}
+	if (!ov.matchDimension(cols, rows, 1)){
+		ov.allocate(cols, rows, 1);
+	}
+	for (int j = 0; j < rows; j++){
+        for(int i = 0; i < cols; i++){
+            float u = inMat.at<cv::Vec2f>(j,i)[0];
+            float v = inMat.at<cv::Vec2f>(j,i)[1];
+            ou[j*cols + i] = u;
+            ov[j*cols + i] = v;
+        }
+	}
+}
+
+template <class T>
+float OpticFlowIO::ErrorImage(unsigned char* fillPix, T* u1, T* v1, T* u2, T* v2, int w, int h)
+{
+	unsigned char pix[4];
+
+//#define LOG_COLOR
+#ifdef LOG_COLOR
+	float LC[10][5] =
+	{ { 0, 0.0625, 49, 54, 149 },
+	{ 0.0625, 0.125, 69, 117, 180 },
+	{ 0.125, 0.25, 116, 173, 209 },
+	{ 0.25, 0.5, 171, 217, 233 },
+	{ 0.5, 1, 224, 243, 248 },
+	{ 1, 2, 254, 224, 144 },
+	{ 2, 4, 253, 174, 97 },
+	{ 4, 8, 244, 109, 67 },
+	{ 8, 16, 215, 48, 39 },
+	{ 16, 1000000000.0, 165, 0, 38 } };
+#endif
+
+	int totalCnt = 0;
+	int validCnt = 0;
+	for (int i = 0; i < h; i++){
+		for (int j = 0; j < w; j++){
+			int idx = i*w + j;
+
+			if (unknown_flow(u1[idx], v1[idx]) || unknown_flow(u2[idx], v2[idx])){
+				// red: occlusion
+				pix[0] = 0; pix[1] = 0; pix[2] = 255;
+				pix[2] = 0; // TODO
+				pix[3] = 0xFF; // only for alignment
+				memcpy(fillPix + idx * 4, pix, 4);
+				continue;
+			}
+
+			float endPtErr = sqrt(pow(u1[idx] - u2[idx], 2) + pow(v1[idx] - v2[idx], 2));
+
+#ifdef LOG_COLOR
+			float f_err = endPtErr;
+			float f_mag = sqrt(u2[idx] * u2[idx] + v2[idx] * v2[idx]);
+			float n_err = std::min(f_err / 3.0, 20.0*f_err / f_mag);
+			for (int i = 0; i < 10; i++) {
