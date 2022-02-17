@@ -276,3 +276,138 @@ double CStochastic::VectorSquareDistance(int Dim,T1* pVector1,T2* pVector2)
 {
 	double result=0,temp;
 	int i;
+	for(i=0;i<Dim;i++)
+	{
+		temp=pVector1[i]-pVector2[i];
+		result+=temp*temp;
+	}
+	return result;
+}
+
+template <class T1>
+void CStochastic::KMeanClustering(int Dim,int NumData,int NumClusters,T1* pData,int *pPartition,double** pClusterMean,int MaxIterationNum, int MinClusterSampleNumber)
+{
+	int i,j,k,l,Index,ClusterSampleNumber;
+	double MinDistance,Distance;
+	double** pCenters;
+	pCenters=new double*[NumClusters];
+	for(i=0;i<NumClusters;i++)
+		pCenters[i]=new double[Dim];
+	
+	// generate randome guess of the partition
+_CStochastic_KMeanClustering_InitializePartition:
+	for(i=0;i<NumClusters;i++)
+	{
+		Index=UniformSampling(NumData);
+		for(j=0;j<Dim;j++)
+			pCenters[i][j]=pData[Index*Dim+j];
+	}
+
+	for(k=0;k<MaxIterationNum;k++)
+	{
+		// step 1. do partition
+		for(i=0;i<NumData;i++)
+		{
+			MinDistance=1E100;
+			for(j=0;j<NumClusters;j++)
+			{
+				Distance=VectorSquareDistance(Dim,pData+i*Dim,pCenters[j]);
+				if(Distance<MinDistance)
+				{
+					MinDistance=Distance;
+					Index=j;
+				}
+			}
+			pPartition[i]=Index;
+		}
+		// step 2. compute mean
+		for(i=0;i<NumClusters;i++)
+		{
+			memset(pCenters[i],0,sizeof(double)*Dim);
+			ClusterSampleNumber=0;
+			for(j=0;j<NumData;j++)
+				if(pPartition[j]==i)
+				{
+					for(l=0;l<Dim;l++)
+						pCenters[i][l]+=pData[j*Dim+l];
+					ClusterSampleNumber++;
+				}
+			// maybe the initial partition is bad
+			// if so just do initial partition again
+			if(ClusterSampleNumber<MinClusterSampleNumber)
+				goto _CStochastic_KMeanClustering_InitializePartition;
+			for(l=0;l<Dim;l++)
+				pCenters[i][l]/=ClusterSampleNumber;
+		}
+	}
+	// output the final partition if necessary
+	if(pClusterMean!=NULL)
+		for(i=0;i<NumClusters;i++)
+			for(l=0;l<Dim;l++)
+				pClusterMean[i][l]=pCenters[i][l];
+	// free buffer
+	for(i=0;i<NumClusters;i++)
+		delete pCenters[i];
+	delete []pCenters;
+}
+
+template <class T>
+double CStochastic::norm(T* X,int Dim)
+{
+	double result=0;
+	int i;
+	for(i=0;i<Dim;i++)
+		result+=X[i]*X[i];
+	result=sqrt(result);
+	return result;
+}
+
+template <class T1,class T2>
+int CStochastic::FindClosestPoint(T1* pPointSet,int NumPoints,int nDim,T2* QueryPoint)
+{
+	int i,j,Index=0,offset;
+	T1 MinDistance,Distance,x;
+	MinDistance=0;
+	for(j=0;j<nDim;j++)
+		MinDistance+=_abs(pPointSet[j]-QueryPoint[j]);
+	for(i=1;i<NumPoints;i++)
+	{
+		Distance=0;
+		offset=i*nDim;
+		for(j=0;j<nDim;j++)
+		{
+			x=pPointSet[offset+j]-QueryPoint[j];
+			Distance+=_abs(x);
+		}
+		if(Distance<MinDistance)
+		{
+			MinDistance=Distance;
+			Index=i;
+		}
+	}
+	return Index;
+}
+
+template <class T1,class T2>
+void CStochastic::GaussianFiltering(T1* pSrcArray,T2* pDstArray,int NumPoints,int nChannels,int size,double sigma)
+{
+	int i,j,u,l;
+	double *pGaussian,temp;
+	pGaussian=new double[2*size+1];
+	Generate1DGaussian(pGaussian,size,sigma);
+	for(i=0;i<NumPoints;i++)
+		for(l=0;l<nChannels;l++)
+		{
+			temp=0;
+			for(j=-size;j<=size;j++)
+			{
+				u=i+j;
+				u=__max(__min(u,NumPoints-1),0);
+				temp+=pSrcArray[u*nChannels+l]*pGaussian[j+size];
+			}
+			pDstArray[i*nChannels+l]=temp;
+		}
+	delete pGaussian;
+}
+
+#endif
