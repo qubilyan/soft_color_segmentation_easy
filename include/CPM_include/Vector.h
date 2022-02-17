@@ -332,3 +332,132 @@ const Vector<T> operator*(const Vector<T>& vect1,const Vector<T>& vect2)
 	result*=vect2;
 	return result;
 }
+
+template<class T>
+const Vector<T> operator/(const Vector<T>& vect1,const Vector<T>& vect2)
+{
+	vect1.dimcheck(vect2);
+	Vector<T> result(vect1);
+	result/=vect2;
+	return result;
+}
+
+template <class T>
+Vector<T> operator+(const Vector<T>& vect,double val)
+{
+	Vector<T> result(vect);
+	result+=val;
+	return result;
+}
+
+template <class T>
+Vector<T> operator-(const Vector<T>& vect,double val)
+{
+	Vector<T> result(vect);
+	result-=val;
+	return result;
+}
+
+template <class T>
+Vector<T> operator*(const Vector<T>& vect,double val)
+{
+	Vector<T> result(vect);
+	result*=val;
+	return result;
+}
+
+template <class T>
+Vector<T> operator/(const Vector<T>& vect,double val)
+{
+	Vector<T> result(vect);
+	result/=val;
+	return result;
+}
+
+
+template <class T>
+double innerproduct(const Vector<T>& vect1,const Vector<T>& vect2)
+{
+	vect1.dimcheck(vect2);
+	double result=0;
+	for(int i=0;i<vect1.nDim;i++)
+		result+=vect1.pData[i]*vect2.pData[i];
+	return result;
+}
+
+template <class T>
+void Vector<T>::concatenate(const vector< Vector<T> >& vect)
+{
+	releaseData();
+	nDim = 0;
+	for(int i = 0;i<vect.size();i++)
+		nDim += vect[i].dim();
+	allocate(nDim);
+	int dim = 0;
+	for(int i = 0;i<vect.size(); i++)
+	{
+		for(int j = 0;j<vect[i].dim();j++)
+			pData[dim+j] = vect[i][j];
+		dim += vect[i].dim();
+	}
+}
+
+#ifdef _QT
+
+bool Vector::writeVector(QFile& file) const
+{
+	file.write((char *)&nDim,sizeof(int));
+	if(file.write((char *)pData,sizeof(double)*nDim)!=sizeof(double)*nDim)
+		return false;
+	return true;
+}
+
+bool Vector::readVector(QFile &file)
+{
+	releaseData();
+	file.read((char *)&nDim,sizeof(int));
+	if(nDim<0)
+		return false;
+	if(nDim>0)
+	{
+		allocate(nDim);
+		if(file.read((char *)pData,sizeof(double)*nDim)!=sizeof(double)*nDim)
+			return false;
+	}
+	return true;
+}
+
+#endif
+
+
+#ifdef _MATLAB
+
+template <class T>
+void Vector<T>::readVector(const mxArray* prhs)
+{
+	if(pData!=NULL)
+		delete pData;
+	int nElements = mxGetNumberOfDimensions(prhs);
+	if(nElements>2)
+		mexErrMsgTxt("A vector is expected to be loaded!");
+	const int* dims = mxGetDimensions(prhs);
+	nDim = dims[0]*dims[1];
+	pData = new T[nDim];
+	double* ptr = (double*)mxGetData(prhs);
+	for(int i =0;i<nDim;i++)
+		pData[i] = ptr[i];
+}
+
+template <class T>
+void Vector<T>::writeVector(mxArray*& plhs) const
+{
+	int dims[2];
+	dims[0]=nDim;dims[1]=1;
+	plhs=mxCreateNumericArray(2, dims,mxDOUBLE_CLASS, mxREAL);
+	double *ptr = (double*)mxGetData(plhs);
+	for(int i =0;i<nDim;i++)
+		ptr[i] = pData[i];
+}
+#endif
+
+//*/
