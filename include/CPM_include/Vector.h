@@ -184,3 +184,151 @@ void Vector<T>::copyData(const Vector &vect)
 	}
 	memcpy(pData,vect.pData,sizeof(T)*nDim);
 }
+
+template <class T>
+void Vector<T>::dimcheck(const Vector &vect) const
+{
+	if(nDim!=vect.nDim)
+		cout<<"The dimensions of the vectors don't match!"<<endl;
+}
+
+template <class T>
+void Vector<T>::reset()
+{
+	if(pData!=NULL)
+		memset(pData,0,sizeof(T)*nDim);
+}
+
+
+template <class T>
+T Vector<T>::sum() const
+{
+	T total = 0;
+	for(int i=0;i<nDim;i++)
+		total += pData[i];
+	return total;
+}
+
+template <class T>
+double Vector<T>::norm2() const
+{
+	double temp=0;
+	for(int i=0;i<nDim;i++)
+		temp+=pData[i]*pData[i];
+	return temp;
+}
+
+template <class T>
+void Vector<T>::printVector()
+{
+	for(int i=0;i<nDim;i++)
+		cout<<pData[i]<<' ';
+	cout<<endl;
+}
+
+
+//----------------------------------------------------------------------------------
+// operators
+//----------------------------------------------------------------------------------
+template <class T>
+Vector<T>& Vector<T>::operator =(const Vector<T> &vect)
+{
+	copyData(vect);
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator +=(const Vector<T> &vect)
+{
+	dimcheck(vect);
+	for(int i=0;i<nDim;i++)
+		pData[i]+=vect.data()[i];
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator *=(const Vector<T> &vect)
+{
+	dimcheck(vect);
+	for(int i=0;i<nDim;i++)
+		pData[i]*=vect.data()[i];
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator -=(const Vector<T> &vect)
+{
+	dimcheck(vect);
+	for(int i=0;i<nDim;i++)
+		pData[i]-=vect.data()[i];
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator /=(const Vector<T> &vect)
+{
+	dimcheck(vect);
+	for(int i=0;i<nDim;i++)
+		pData[i]/=vect.data()[i];
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator +=(double val)
+{
+	for(int i=0;i<nDim;i++)
+		pData[i]+=val;
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator *=(double val)
+{
+	for(int i=0;i<nDim;i++)
+		pData[i]*=val;
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator -=(double val)
+{
+	for(int i=0;i<nDim;i++)
+		pData[i]-=val;
+	return *this;
+}
+
+template <class T>
+Vector<T>& Vector<T>::operator /=(double val)
+{
+	for(int i=0;i<nDim;i++)
+		pData[i]/=val;
+	return *this;
+}
+
+
+template<class T>
+const Vector<T> operator+(const Vector<T>& vect1,const Vector<T>& vect2)
+{
+	vect1.dimcheck(vect2);
+	Vector<T> result(vect1);
+	result+=vect2;
+	return result;
+}
+
+template<class T>
+const Vector<T> operator-(const Vector<T>& vect1,const Vector<T>& vect2)
+{
+	vect1.dimcheck(vect2);
+	Vector<T> result(vect1);
+	result-=vect2;
+	return result;
+}
+
+template<class T>
+const Vector<T> operator*(const Vector<T>& vect1,const Vector<T>& vect2)
+{
+	vect1.dimcheck(vect2);
+	Vector<T> result(vect1);
+	result*=vect2;
+	return result;
+}
