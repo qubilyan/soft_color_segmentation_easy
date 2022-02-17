@@ -10,4 +10,9 @@ void _Release1DBuffer(T* pBuffer)
 	pBuffer=NULL;
 }
 
-temp
+template <class T>
+void _Rlease2DBuffer(T** pBuffer,size_t nElements)
+{
+	for(size_t i=0;i<nElements;i++)
+		delete [](pBuffer[i]);
+	delete []pBu
