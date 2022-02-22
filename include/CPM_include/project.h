@@ -28,4 +28,16 @@ void _Rlease2DBuffer(T** pBuffer,size_t nElements)
 
 #define strcmpi strcasecmp
 
-template <class T1,class 
+template <class T1,class T2>
+T1 __min(T1 a, T2 b)
+{
+  return (a>b)?b:a;
+}
+
+template <class T1,class T2>
+T1 __max(T1 a, T2 b)
+{
+  return (a<b)?b:a;
+}
+
+#endif
