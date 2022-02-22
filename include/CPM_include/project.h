@@ -15,4 +15,17 @@ void _Rlease2DBuffer(T** pBuffer,size_t nElements)
 {
 	for(size_t i=0;i<nElements;i++)
 		delete [](pBuffer[i]);
-	delete []pBu
+	delete []pBuffer;
+	pBuffer=NULL;
+}
+
+#ifdef _MATLAB
+#include "mex.h"
+#endif
+
+
+#ifndef WIN32
+
+#define strcmpi strcasecmp
+
+template <class T1,class 
