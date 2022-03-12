@@ -12,4 +12,10 @@
 
 #include <opencv2/opencv.hpp>
 #include <vector>
-#
+#include "constants.h"
+#include <tuple>
+#include "guidedfilter.h"
+#include "Pixel.h"
+#include "Minimization.h"
+
+void getGlobalColorModel(cv::Mat &imag
