@@ -18,4 +18,5 @@
 #include "Pixel.h"
 #include "Minimization.h"
 
-void getGlobalColorModel(cv::Mat &imag
+void getGlobalColorModel(cv::Mat &image, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, double tau);
+bool getGlobalColorModelVideo(std::vector<cv::Vec3d> &mea
