@@ -25,4 +25,7 @@ bool getGlobalColorModelVideo(std::vector<cv::Vec3d> &means,
 void saveColorModelAsImage(const char * filename, std::vector<cv::Vec3d> means, std::vector<cv::Matx33d> covs);
 
 float distHistogram(cv::Mat img1, cv::Mat img2);
-bool isCMRepresentative(std::vect
+bool isCMRepresentative(std::vector<cv::Vec3d> means, std::vector<cv::Matx33d> covs, cv::Mat frame);
+
+
+#endif // COLORMODEL_H_
