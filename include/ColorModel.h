@@ -19,4 +19,7 @@
 #include "Minimization.h"
 
 void getGlobalColorModel(cv::Mat &image, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, double tau);
-bool getGlobalColorModelVideo(std::vector<cv::Vec3d> &mea
+bool getGlobalColorModelVideo(std::vector<cv::Vec3d> &means,
+	std::vector<cv::Matx33d> &covs, std::vector<cv::Mat> frames, int frames_to_stack, double tau);
+	
+void saveColorModelAsImage(const char * filen
