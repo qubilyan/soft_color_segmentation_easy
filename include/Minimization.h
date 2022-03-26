@@ -19,4 +19,6 @@
 typedef double (* vFunctionCall)(std::vector<double> v, void* params); // pointer to function returning double
 typedef std::vector<double> (* vFunctionCall2)(std::vector<double> v, void* params);
 
-//sta
+//static variables for debugging (which is reached: maxIterLineSeach, cg_max_iter or isMin)
+extern int reach_ls_iter;
+extern int total_line_se
