@@ -16,4 +16,7 @@
 #include <numeric>
 #include "constants.h"
 
-typedef double (* vFunctionCall)(std::vector<do
+typedef double (* vFunctionCall)(std::vector<double> v, void* params); // pointer to function returning double
+typedef std::vector<double> (* vFunctionCall2)(std::vector<double> v, void* params);
+
+//sta
