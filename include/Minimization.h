@@ -8,4 +8,12 @@
  */
 
 #ifndef MINIMIZATION_H_
-#define MINIMIZATION
+#define MINIMIZATION_H_
+
+#include <vector>
+#include <tuple>
+#include <opencv2/opencv.hpp>
+#include <numeric>
+#include "constants.h"
+
+typedef double (* vFunctionCall)(std::vector<do
