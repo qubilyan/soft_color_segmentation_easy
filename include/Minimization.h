@@ -27,4 +27,6 @@ extern int reach_isMin_iter;
 
 double energy(std::vector<double> v, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, bool sparse);
 double min_f(std::vector<double> &v, void *params);
-std::vector<double> min_df(std::
+std::vector<double> min_df(std::vector<double> &v, void* params);
+double min_refine_f(std::vector<double> &v, void *params);
+std::vector<double> min_refine_df(std::vector<double> &v, v
