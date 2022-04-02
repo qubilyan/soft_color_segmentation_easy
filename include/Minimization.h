@@ -25,4 +25,6 @@ extern int total_line_search;
 extern int reach_cg_iter;
 extern int reach_isMin_iter;
 
-double energy(std::vector<double> v, std::vector<cv::Vec3d> &means, s
+double energy(std::vector<double> v, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, bool sparse);
+double min_f(std::vector<double> &v, void *params);
+std::vector<double> min_df(std::
