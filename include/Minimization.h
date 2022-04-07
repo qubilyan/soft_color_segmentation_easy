@@ -29,4 +29,6 @@ double energy(std::vector<double> v, std::vector<cv::Vec3d> &means, std::vector<
 double min_f(std::vector<double> &v, void *params);
 std::vector<double> min_df(std::vector<double> &v, void* params);
 double min_refine_f(std::vector<double> &v, void *params);
-std::vector<double> min_refine_df(std::vector<double> &v, v
+std::vector<double> min_refine_df(std::vector<double> &v, void* params);
+cv::Vec4d g(std::vector<double> &v, int n, cv::Vec3d color);
+std::vector<double> minimizeCG(std::vector<double> x_0, vFunctionCall f, vFunction
