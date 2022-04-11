@@ -33,4 +33,5 @@ std::vector<double> min_refine_df(std::vector<double> &v, void* params);
 cv::Vec4d g(std::vector<double> &v, int n, cv::Vec3d color);
 std::vector<double> minimizeCG(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df,
     std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, cv::Vec3d color);
-std::vector<double> minimizeFCG(std::vector<double> x_0, vFunctionCall f, vFun
+std::vector<double> minimizeFCG(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df,
+    std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, cv::Vec3d color,  double p, cv::Vec4d lambda, std::vector<double> gt_alpha
