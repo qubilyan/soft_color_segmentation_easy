@@ -36,4 +36,8 @@ std::vector<double> minimizeCG(std::vector<double> x_0, vFunctionCall f, vFuncti
 std::vector<double> minimizeFCG(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df,
     std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, cv::Vec3d color,  double p, cv::Vec4d lambda, std::vector<double> gt_alpha);
 std::vector<double> minimizeMofM(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df,
-    std::vector<cv::Vec3d> &means, std::vector<cv::M
+    std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, cv::Vec3d color, std::vector<double> gt_alpha);
+
+void print_v(std::vector<double> v);
+
+#endif // MINIMIZATION_H_
