@@ -17,4 +17,8 @@ struct Unmixing
 {
 	std::vector<double> alphas;
 	std::vector<cv::Vec3d> colors;
-	cv::Poin
+	cv::Point coords;
+	Unmixing() : alphas(0), colors(0), coords(0,0) {}
+};
+
+#endif // UNMIXING_H_
