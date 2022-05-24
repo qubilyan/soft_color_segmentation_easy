@@ -24,3 +24,6 @@ public:
 private:
     GuidedFilterImpl *impl_;
 };
+
+cv::Mat guidedFilter(const cv::Mat &I, const cv::Mat &p, int r, double eps, int depth = -1);
+std::vector<cv::Mat> MatteRegularisation(int rad
