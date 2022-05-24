@@ -16,4 +16,11 @@ class GuidedFilterImpl;
 class GuidedFilter
 {
 public:
-    GuidedFilter(const cv
+    GuidedFilter(const cv::Mat &I, int r, double eps);
+    ~GuidedFilter();
+
+    cv::Mat filter(const cv::Mat &p, int depth = -1) const;
+
+private:
+    GuidedFilterImpl *impl_;
+};
