@@ -26,4 +26,6 @@ private:
 };
 
 cv::Mat guidedFilter(const cv::Mat &I, const cv::Mat &p, int r, double eps, int depth = -1);
-std::vector<cv::Mat> MatteRegularisation(int rad
+std::vector<cv::Mat> MatteRegularisation(int radius, cv::Mat frame, std::vector<cv::Mat> layers);
+
+#endif // GUIDED_FILTER_H
