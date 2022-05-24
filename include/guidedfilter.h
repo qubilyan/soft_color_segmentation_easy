@@ -8,4 +8,12 @@
 #ifndef GUIDED_FILTER_H
 #define GUIDED_FILTER_H
 
-#include <opencv2/o
+#include <opencv2/opencv.hpp>
+#include <opencv2/ximgproc/edge_filter.hpp>
+
+class GuidedFilterImpl;
+
+class GuidedFilter
+{
+public:
+    GuidedFilter(const cv
