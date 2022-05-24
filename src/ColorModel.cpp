@@ -104,3 +104,143 @@ double mg_projectedCUEnergyAlt(cv::Vec3d m1, cv::Vec3d m2, cv::Matx33d c1, cv::M
 	else{
 
 		//Compute F (Eq 16 in unmixing paper)
+		cv::Vec3d u1 = color - (((color - m1).dot(n))/(n.dot(n)))*n; //Eq 14 in unmixing paper
+		cv::Vec3d u2 = color - (((color - m2).dot(n))/(n.dot(n)))*n;
+		double alpha_1 = cv::norm(color - u2)/cv::norm(u1 - u2);//Eq 15 in unmixing paper
+		double alpha_2 = 1 - alpha_1;
+		double mahal1 = mg_computeMahalProj(m1, cv::Vec3d(m2-m1), c1, color); //computed projected mahalanobis distance
+		double mahal2 = mg_computeMahalProj(m2, cv::Vec3d(m1-m2), c2, color);
+		cost = alpha_1*(mahal1) + alpha_2*(mahal2); 
+	}
+	return cost;
+}
+
+
+/**
+ * Representation score of input color. If the score is lower, the color is better represented with the current color model.
+ */
+double representationScoreAlt(cv::Vec3d color, int n, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, double tau, int &proj){
+	if(n == 0){ 
+		// No colors yet in color model, all colors not well represented
+		return std::pow(tau,2) + 1;
+
+	} else if(n == 1){
+
+		return std::pow(cv::Mahalanobis(color, means.at(0), (covs.at(0)).inv()),2);
+
+	} else {
+
+		std::vector<double> repList;
+		std::vector<int> indList; //use this to check if a given color uses the projected color unmixing or the original color unmixing cost 
+		double proj_cost, norm_cost;
+		for(unsigned int i = 0; i < n; i++){
+
+			norm_cost = (std::pow(cv::Mahalanobis(color, means.at(i), (covs.at(i)).inv()),2));
+			repList.push_back(norm_cost);
+			indList.push_back(0);
+			for(unsigned int j = i+1; j < n; j++){ 
+
+				proj_cost = mg_projectedCUEnergyAlt(means.at(i), means.at(j), covs.at(i), covs.at(j), color); //compute projected unmixing energy
+				repList.push_back(proj_cost);
+				indList.push_back(1);
+			}
+		}
+		//use proj to see what colors are using projected unmixing - for debugging
+		double min_cost = *min_element(repList.begin(), repList.end());
+		for(unsigned int j = 0; j < repList.size(); j++){
+			if(min_cost == repList.at(j)){
+				proj = indList.at(j);
+			}
+		}
+		return min_cost;
+	}
+}
+
+/**
+ * Get the bin that pixel c is voting for
+ */
+std::tuple<int, int, int> getVotingBinAlt(cv::Vec3d c){
+	std::tuple<int, int, int> bin;
+	bin = std::make_tuple(std::floor(c.val[0]/0.1),std::floor(c.val[1]/0.1),std::floor(c.val[2]/0.1));
+	if(std::get<0>(bin) == 10){
+			std::get<0>(bin) = 9;
+		}
+	if(std::get<1>(bin) == 10){
+			std::get<1>(bin) = 9;
+		}
+	if(std::get<2>(bin) == 10){
+			std::get<2>(bin) = 9;
+		}
+
+	return bin;
+}
+
+/**
+ * Create guided filter kernel around the seed pixel at coordinates m,n
+ * See Eq. 11 of "Guided Image Filtering" by He et. al.
+ */
+cv::Mat kernelValuesAlt(cv::Rect roi, cv::Mat &img, int m, int n){
+	// Neighbourhood around seed pixel, each pixel gets a kernel value
+	int count3;
+	cv::Mat neighbourhood = img(roi).clone();
+	//imwrite("kernel_neigh.png", neighbourhood*255);
+	cv::Mat kernel(neighbourhood.size(), CV_64FC3, cv::Scalar(0.0));
+	cv::Mat kernel_weights(neighbourhood.size(), CV_64FC1, cv::Scalar(0.0));
+	cv::Vec3d S = img.at<cv::Vec3d>(m,n); // Seed pixel
+	double eps = 0.01;
+	double weight = 0;
+	// Create filter window for every pixel in neighbourhood
+	for(int i = roi.y; i < neighbourhood.rows+roi.y; i++){
+		for(int j = roi.x; j < neighbourhood.cols+roi.x; j++){
+			cv::Rect roiN(std::max(j-10,0),std::max(i-10,0),std::min(20,img.cols-j),std::min(20,img.rows-i));
+			cv::Mat patch = img(roiN).clone();
+			cv::Scalar nMean;
+			cv::Scalar nStddev;
+			cv::meanStdDev(patch, nMean, nStddev);
+			// For every pixel in window, calculate value to add to kernel value
+			for(int k = roiN.y; k < patch.rows+roiN.y; k++){ // k start patch corner (in image coord), goes to patch corner + 20
+				for(int l = roiN.x; l < patch.cols+roiN.x; l++){ // l start patch corner (in image coord), goes to patch corner + 20
+					int x = k - (m-10); //m-10 is where original patch start, if k is smaller, its outside original patch //coordinates in original patch
+					int y = l - (n-10);//n-10 is where original patch start, if l is smaller, its outside original patch //coordinates in original patch
+					if(x >= 0 && y >= 0 && x < 20 && y < 20){ // But only if that pixel was in the original neighbourhood
+						cv::Vec3d I = img.at<cv::Vec3d>(k,l);
+						double v1 = 1 + (((I.val[0] - nMean.val[0]) * (S.val[0] - nMean.val[0])) / (std::pow(nStddev.val[0],2) + eps));
+						double v2 = 1 + (((I.val[1] - nMean.val[1]) * (S.val[1] - nMean.val[1])) / (std::pow(nStddev.val[1],2) + eps));
+						double v3 = 1 + (((I.val[2] - nMean.val[2]) * (S.val[2] - nMean.val[2])) / (std::pow(nStddev.val[2],2) + eps));
+						kernel.at<cv::Vec3d>(x,y) = kernel.at<cv::Vec3d>(x,y) + cv::Vec3d(v1,v2,v3);
+					}
+				}
+			}
+			//writeMatToFile(kernel,"kernel.txt");
+			//std::string var_ker_s = std::string("kernel_") + std::to_string(i) + std::to_string(j) + std::string(".txt");
+			//const char* cvec = var_ker_s.c_str();
+			//writeMatToFile(kernel,cvec);
+
+		}
+	}
+	for(size_t i = 0; i < kernel.rows; i++){
+		for(size_t j = 0; j < kernel.cols; j++){
+			weight = sqrt(kernel.at<cv::Vec3d>(i,j)[0]*kernel.at<cv::Vec3d>(i,j)[0] + kernel.at<cv::Vec3d>(i,j)[1]*kernel.at<cv::Vec3d>(i,j)[1] + kernel.at<cv::Vec3d>(i,j)[2]*kernel.at<cv::Vec3d>(i,j)[2]);
+			kernel_weights.at<double>(i,j) = weight;
+		}
+	}
+	return kernel_weights;
+}
+
+
+/**
+ * Voting energy of pixel - eq 10 unmixing paper
+*/
+double getVoteAlt(cv::Vec3d gradient, double repScore){
+	return std::pow(std::exp(-cv::norm(gradient, cv::NORM_L2)),2) * (1-std::exp(-repScore)); //mg added the square term 
+}
+
+/**
+ * Calculate from which bin the next seed pixel should come from. See Section 5 of
+ * "Unmixing-Based Soft Color Segmentation for Image Manipulation"
+ */
+std::tuple<int, int, int> nextBin(cv::Mat &img, cv::Mat &gradient, std::vector<cv::Vec3d> &means,
+	std::vector<cv::Matx33d> &covs, cv::Mat &votemask, double tau, double &vote){
+	
+	//mg used for debugging to save image output
+	//cv::Mat check_rep = cv::Mat(img.rows, img.cols,CV_64FC3, cv::Scalar(0.0,0.0,0.0)); //use this to check whether color uses proj unmixing or not
