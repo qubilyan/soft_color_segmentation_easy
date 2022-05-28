@@ -244,3 +244,147 @@ std::tuple<int, int, int> nextBin(cv::Mat &img, cv::Mat &gradient, std::vector<c
 	
 	//mg used for debugging to save image output
 	//cv::Mat check_rep = cv::Mat(img.rows, img.cols,CV_64FC3, cv::Scalar(0.0,0.0,0.0)); //use this to check whether color uses proj unmixing or not
+	//cv::Mat store_score = cv::Mat(img.rows, img.cols,CV_64FC3, cv::Scalar(0.0,0.0,0.0)); //use this to store rep score as image
+	//cv::Mat store_grad =  cv::Mat(img.rows, img.cols,CV_64FC1, cv::Scalar(0.0)); //use this to store rep score as txt file (can open in Matlab)
+	//cv::Mat store_score2 = cv::Mat(img.rows, img.cols,CV_64FC1, cv::Scalar(0.0)); //use this to store rep score as txt file (can open in Matlab)
+	//cv::Mat store_vote = cv::Mat(img.rows, img.cols,CV_64FC1, cv::Scalar(0.0)); //use this to store rep score as txt file (can open in Matlab)
+	
+	double votes[10][10][10] = {0};
+	std::vector<double> scoreList;
+	std::vector<double> voteList;
+	std::tuple<int, int, int> bin;
+	cv::Vec3d c, g;
+	int n = means.size();
+	double score;
+	int scorecounter = 0;
+
+    for(size_t i = 0; i < img.rows; i++){
+		for(size_t j = 0; j < img.cols; j++){
+		
+			//mg used for debugging 
+			//c = img.at<cv::Vec3d>(i,j);//mg if this section added, remove from lower loop
+			//g = gradient.at<cv::Vec3d>(i,j);
+			//bin = getVotingBinAlt(c);
+			//int proj = 0;
+			//score = representationScoreAlt(c,n,means,covs, tau, proj);
+			//if(proj == 1){
+			//	check_rep.at<cv::Vec3d>(i,j) = cv::Vec3d(1, 0, 0);
+			//}
+			//store_score.at<cv::Vec3d>(i,j) = cv::Vec3d(score, 0, 0);
+			//store_score2.at<double>(i,j) = score;
+			//store_grad.at<double>(i,j) = cv::norm(g, cv::NORM_L2);
+			//store_vote.at<double>(i,j) =  std::exp(-cv::norm(g, cv::NORM_L2))*(1-std::exp(-score));//std::exp(-cv::norm(g, cv::NORM_L2));//getVoteAlt(g,score);
+			//uchar temp = votemask.at<uchar>(i,j);		
+
+			if(votemask.at<uchar>(i,j) == 0){
+				c = img.at<cv::Vec3d>(i,j);
+				g = gradient.at<cv::Vec3d>(i,j);
+				bin = getVotingBinAlt(c);
+				int proj = 0;
+				score = representationScoreAlt(c,n,means,covs, tau, proj);
+				// Each pixel votes for its own bin with a certain energy
+				scoreList.push_back(score);
+				voteList.push_back(getVoteAlt(g,score));
+				if(score > pow(tau,2)){
+					scorecounter++;
+					votes[std::get<0>(bin)][std::get<1>(bin)][std::get<2>(bin)]
+						= votes[std::get<0>(bin)][std::get<1>(bin)][std::get<2>(bin)] + getVoteAlt(g,score);
+				} else {
+					votemask.at<uchar>(i,j) = 255;
+				}
+			}
+		}
+	}
+
+	//mg used for debugging 
+	//std::string var_rep_score_check = std::string("rep_score_blue") + std::to_string(means.size())+ std::string(".png");	
+	//imwrite( var_rep_score_check, 255*check_rep);
+	//std::string var_rep_s = std::string("rep_score") + std::to_string(means.size())+ std::string(".txt");
+	//const char* cvec = var_rep_s.c_str();
+	//writeMatToFile(store_score2,cvec);
+	//std::string var_vote_s = std::string("vote_") + std::to_string(means.size())+ std::string(".txt");
+	//const char* cvecscore = var_vote_s.c_str();
+	//writeMatToFile(store_vote,cvecscore);
+	//cv::normalize(store_score,store_score, 255, 0, CV_MINMAX);
+	//std::string var_rep = std::string("rep_score") + std::to_string(means.size())+ std::string(".png");
+    //imwrite(var_rep, store_score);
+	//std::string var_grad_s = std::string("grad_") + std::to_string(means.size())+ std::string(".txt");
+	//const char* cvecgrad = var_grad_s.c_str();
+	//writeMatToFile(store_grad,cvecgrad);
+
+
+	// Find bin with most votes
+	std::tuple<int, int, int> ret;
+	for(size_t i = 0; i < 10; i++){
+		for(size_t j = 0; j < 10; j++){
+			for(size_t k = 0; k < 10; k++){
+				if(votes[i][j][k] > vote){ //make sure it has enough votes
+					vote = votes[i][j][k];
+					ret = std::make_tuple(i,j,k);
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+
+
+
+
+
+/**
+ * Calculate the next seed pixel for the color model. See Section 5 of
+ * "Unmixing-Based Soft Color Segmentation for Image Manipulation"
+ */
+void getNextSeedPixelAlt(cv::Mat &img, cv::Mat &gradient, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs,
+	cv::Mat &votemask, double tau, std::tuple<int, int, int> t){
+	// Given the next bin, find the next seed pixel
+	//std::cout << "The next seed pixel comes from bin: " << std::get<0>(t) << " " << std::get<1>(t);
+	cv::Mat mask, pixelsInBin;
+	double low_b = std::get<0>(t)*0.1;
+	double low_g = std::get<1>(t)*0.1;
+	double low_r = std::get<2>(t)*0.1;
+	double high_b = (std::get<0>(t)+1)*0.1;
+	double high_g = (std::get<1>(t)+1)*0.1;
+	double high_r = (std::get<2>(t)+1)*0.1;
+	int s = 0;
+	// Create a mask for all pixels in the same bin
+	cv::inRange(img,cv::Scalar(low_b,low_g,low_r),cv::Scalar(high_b,high_g,high_r),mask);
+	cv::bitwise_and(img,img,pixelsInBin,mask);
+	std::tuple<int, int> p;
+    cv::Mat neighbourhood;
+    /* Count for each pixel in that bin how many pixels in the surrounding 20x20 neighbourhood are also in that bin
+       Seed pixel is the pixel with the highest count */
+	for(int i = 0; i < pixelsInBin.rows; i++){
+		for(int j = 0; j < pixelsInBin.cols; j++){
+			if(mask.at<uchar>(i,j) != 0){
+				if(votemask.at<uchar>(i,j) != 255){//make sure pixels are unrepresented
+					cv::Vec3d grad = gradient.at<cv::Vec3d>(i,j);
+					cv::Rect roi(std::max(j-10,0),std::max(i-10,0),std::min(20,pixelsInBin.cols-j),std::min(20,pixelsInBin.rows-i));
+					neighbourhood = mask(roi).clone();
+					int sp = 0;
+					for(size_t k = 0; k < neighbourhood.rows; k++){
+						for(size_t l = 0; l < neighbourhood.cols; l++){
+							if(neighbourhood.at<uchar>(k,l) == 255){
+								sp++;
+							}
+						}
+					}
+					double si = sp*exp(-cv::norm(grad, cv::NORM_L2));
+					if(si >= s){
+						s = si;
+						p = std::make_tuple(i,j);
+					}
+				}
+			}
+		}
+	}
+	// i, j are coordinates of next seed pixel
+	int i = std::get<0>(p);
+	int j = std::get<1>(p);
+	std::cout << "The color of the next seed pixel is: "  << img.at<cv::Vec3d>(i,j)  <<  std::endl;
+
+	cv::Rect roi(std::max(j-10,0),std::max(i-10,0),std::min(20,pixelsInBin.cols-j),std::min(20,pixelsInBin.rows-i));
+	//use filter to find pixels that are similar in colour
