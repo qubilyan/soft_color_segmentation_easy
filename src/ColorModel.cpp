@@ -388,3 +388,138 @@ void getNextSeedPixelAlt(cv::Mat &img, cv::Mat &gradient, std::vector<cv::Vec3d>
 
 	cv::Rect roi(std::max(j-10,0),std::max(i-10,0),std::min(20,pixelsInBin.cols-j),std::min(20,pixelsInBin.rows-i));
 	//use filter to find pixels that are similar in colour
+	cv::Mat kernel;
+	kernel =  kernelValuesAlt(roi, img, i, j);
+	double min_k, max_k; 
+	minMaxLoc(kernel, &min_k, &max_k); //store the min/max of the kernel 
+	neighbourhood = img(roi).clone(); //neighbourhood around seed pixel
+	cv::Mat neigh_mask = mask(roi).clone(); //this mask indicates pixels in the same bin as the seed pixel
+	cv::Mat samples_new = cv::Mat(neigh_mask.rows*neigh_mask.cols, 3, CV_64F);
+	int num_samples = 0;
+	//std::string var_neigh1 = std::string("orig_bin") + std::to_string(means.size())+ std::string(".png");
+	//imwrite( var_neigh1, 255*neighbourhood);
+	for(size_t m = 0; m < neigh_mask.rows; m++){
+		for(size_t n = 0; n < neigh_mask.cols; n++){
+			if(kernel.at<double>(m,n) > (0.7*max_k)){ //if kernel weight is >.7*max, it's close enough in colour to be used to compute mean/cov
+				num_samples ++;
+				cv::Vec3d v = neighbourhood.at<cv::Vec3d>(m,n);
+				samples_new.at<double>(num_samples-1,0) = v.val[0];
+				samples_new.at<double>(num_samples-1,1) = v.val[1];
+				samples_new.at<double>(num_samples-1,2) = v.val[2];
+			}
+		}
+	}
+	//std::string var_neigh = std::string("red_bin") + std::to_string(means.size())+ std::string(".png");
+	//imwrite( var_neigh, 255*neighbourhood);
+	//remove any zeros rows at the end of samples_new
+	cv::Rect mySamples(0, 0, 3, num_samples);
+	cv::Mat samples_new2 = samples_new(mySamples).clone();
+	//std::cout << samples_new << std::endl;
+	//make sure it's not empty
+	if(samples_new2.empty()){ //if there are no points in the neighbourhood, fill the votemask so the algorithm will end
+		votemask = cv::Mat(img.rows, img.cols, CV_8U, cvScalar(255));
+		return;
+	}else{
+
+		//use samples_new2 to compute the covariance matrix
+		cv::Mat mean_samp, cov_samp, cov, cov2, cov3, full_samp;
+		cv::Mat sphere_color = cv::Mat(100, 3, CV_64FC1);
+		cv::Mat sphere001;
+		std::string sphere_filename = "../sphere01.txt";
+
+		//I found that if the 20x20 neighbourhood has a very small variation in colours, the covariance can be too small/narrow along certain direction.
+		//So I add a sample of colours to the colours found in the image patch to prevent any covariance problems.
+		sphere001 = ReadMatFromTxt(sphere_filename, 100, 3); //this file contains a sample of 3D points with mean 0 and std dev .01
+		cv::Vec3d v = img.at<cv::Vec3d>(i,j);
+		for(int i = 0; i < sphere001.rows; i++){
+			sphere_color.at<double>(i,0) = (3*sphere001.at<double>(i,0)) + v.val[0]; //so points now centred at seed pixel colour with std dev .03
+			sphere_color.at<double>(i,1) = (3*sphere001.at<double>(i,1)) + v.val[1];
+			sphere_color.at<double>(i,2) = (3*sphere001.at<double>(i,2)) + v.val[2];
+		}
+		cv::vconcat(sphere_color, samples_new2, full_samp); //add sample from sphere about seed pixel colour to the sample from the patch
+		cv::calcCovarMatrix(full_samp,cov3,mean_samp,CV_COVAR_NORMAL | CV_COVAR_ROWS); //compute covariance
+		cov3 = (cov3 / (full_samp.rows - 1)); //normalise covariance
+		cov = cov3;
+
+
+		//check to make sure covariance is a correct covariance matrix/not close to singular
+		cv::Mat mat_zeros = cv::Mat(3,3,CV_64FC1, cv::Scalar(0.0)); 
+		cv::Scalar sum_mat = (cv::sum(cov - mat_zeros)); 
+		cv::Scalar sum_inv_mat = (cv::sum(cov.inv() - mat_zeros));
+		//1. check diagonal does not contain elements close to 0
+		if(!(cov.at<double>(0,0) > 0.0000001 && cov.at<double>(1,1) > 0.0000001 && cov.at<double>(2,2) > 0.0000001)){ 
+			cov = (cv::Mat_<float>(3, 3) <<0.0001, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0001); //if it does, replace cov with .00001*I
+		}
+		//2. check if cov or cov.inv() are close to zero matrix
+		if((sum_mat.val[0] < .0000000001)||(sum_inv_mat.val[0] < .0000000001)){ //check if cov or cov.inv() are close to zero matrix
+			cov = (cv::Mat_<float>(3, 3) <<0.0001, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0001); //if they are, replace cov with .00001*I
+		}
+
+		//3. make sure the eigenvalues are positive
+		cv::Mat eigenval;
+		cv::eigen(cov, eigenval);
+		for(int eig = 0; eig < eigenval.rows; eig++){
+			if(eigenval.at<double>(eig, 0) < 0){
+				cov = (cv::Mat_<float>(3, 3) <<0.0001, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0001); //if they are, replace cov with .00001*I
+			}
+		}
+
+		//then pass out the new mean and covariance
+		cv::Vec3d mean = img.at<cv::Vec3d>(i,j); //New mean is the color of the seed pixel (not the sample mean)
+		means.push_back(mean);
+		covs.push_back(cov);
+	}	
+}
+
+/**
+ * Calculate the Global Color Model for image
+ */
+void getGlobalColorModel(cv::Mat &image, std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &covs, double tau){
+	cv::Mat gradient;
+	cv::Mat img_small;
+	cv::Laplacian(image, gradient, image.type());
+	int count = 0;
+
+	cv::Mat votemask(image.rows, image.cols, CV_8U, cvScalar(0));
+	double vote = 0.0;
+	std::tuple<int, int, int> t = nextBin(image ,gradient, means, covs, votemask, tau, vote);//compute the bin that the next seed pixel will come from & update votemask
+	
+	// While more than 0.8% of pixels are not yet well represented, and the next bin has enough votes, add more colors to color model
+	do{
+		count = 0;
+		getNextSeedPixelAlt(image, gradient, means, covs, votemask, tau, t); // given the next bin is t, find the seed pixel in t and add new mean and cov
+		vote = 0.0;
+		t = nextBin(image ,gradient, means, covs, votemask, tau, vote); //compute  the next bin to see if it has enough votes. Update votemask to compute unrepresented pixels.
+	
+		// Check which pixels are not yet represented by the color model
+		for(size_t i = 0; i < image.rows; i++){
+			for(size_t j = 0; j < image.cols; j++){
+				if(votemask.at<uchar>(i,j) == 0){ //
+						count++;
+				}
+			}
+		}
+	
+		//std::string var_mask = std::string("mask") + std::to_string(means.size())+ std::string(".png");
+		//imwrite( var_mask, votemask);
+		std::cout << means.size() << " colors in model so far. Still " << count << " pixels unrepresented." << std::endl;
+    }while((count >= (image.rows*image.cols)/800) && (vote > 100.0) );
+
+}
+
+
+/**
+ * Save colour mode as an image with name filename
+ * Start by simply saving square with means values
+ */
+void saveColorModelAsImage(const char * filename, std::vector<cv::Vec3d> means, std::vector<cv::Matx33d> covs) 
+{
+	int nb_colours = means.size();
+	int size_box = 100;
+	cv::Mat model = cv::Mat(size_box, size_box * nb_colours, CV_64FC3); //rows, cols, type
+	for (size_t b=0; b<nb_colours; b++){ //looping on colour boxes
+		for(size_t i=0; i< size_box; i++){ //rows
+			for (size_t j=size_box * b; j<size_box * (b+1); j++){ //cols
+				model.at<cv::Vec3d>(i,j) = means[b] * 255.0;
+			}
+		}
