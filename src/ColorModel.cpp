@@ -523,3 +523,8 @@ void saveColorModelAsImage(const char * filename, std::vector<cv::Vec3d> means, 
 				model.at<cv::Vec3d>(i,j) = means[b] * 255.0;
 			}
 		}
+	}
+	cv::imwrite(filename, model);
+	std::cout << "Colour model mean colours saved as image. "<< std::endl;
+}
+
