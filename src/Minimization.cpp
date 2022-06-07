@@ -462,3 +462,134 @@ double line_search(vFunctionCall f, std::vector<double> &x, std::vector<double> 
 
 	double in = f(x,params);
 	double a_k = .5;
+	int iter = 0;
+	double rhok  = 1e-8;
+	std::vector<double> x1;
+	x1 = lin_transform(x,d,a_k);
+	x1 = clip(x1); // Clip to box constraints
+	while(!(f(x1,params) <= f(x,params) - (a_k*a_k)*(1e-4)*cv::norm(d,cv::NORM_L2)*cv::norm(d,cv::NORM_L2)) && (iter < 7)){ //mg was 5
+		iter++;
+		if(a_k*cv::norm(d,cv::NORM_L2) < rhok){   
+            a_k = 0;
+			x1 = lin_transform(x,d,a_k);
+			x1 = clip(x1);  
+		}else{
+			a_k = a_k*0.5;
+			x1 = lin_transform(x,d,a_k);
+			x1 = clip(x1);
+		}
+	};
+	double out = f(x1,params);
+	if(in < out){
+		a_k = 0;
+	}
+	return a_k;
+}
+
+//mg_changed line_search for testing
+// double mg_line_search(vFunctionCall f, std::vector<double> &x, std::vector<double> d, void* params)
+// {
+// 	//std::cout << f(x,params) << "just inside line search " << std::endl;
+// 	double in = f(x,params);
+// 	int iter = 0;
+// 	std::vector<double> x1;
+// 	double min_cost = 1000000;
+// 	double cost_ai;
+// 	double a_k = 0.0;
+// 	double a_ik = 0.0;
+// 	std::vector<double> x_k;
+// 	for(int a_i = 0; a_i < 501 ; a_i++){
+// 		a_ik = double(a_i)/1000;
+// 		x1 = lin_transform(x,d,a_ik);
+// 		x1 = clip(x1);
+// 		cost_ai = f(x1,params);
+// 		if(cost_ai < min_cost){
+// 			min_cost = cost_ai;
+// 			a_k = a_ik;
+// 			x_k = x1;
+// 		}
+// 	}
+
+// 	double out = f(x_k,params);
+// 	if(in < out){
+// 		a_k = 0;
+// 		//std::cout << "line search wrong" << std::endl;
+// 	}
+// 	return a_k;
+// }
+
+/**
+ * L2-Normed difference between vectors x1 and x2: ||x1-x2||
+ */
+double normed_diff(std::vector<double> &x1, std::vector<double> &x2){
+	double ret = 0;
+	for(unsigned int i = 0; i < x1.size(); i++){
+		ret += pow(x1.at(i) - x2.at(i),2);
+	}
+	return sqrt(ret);
+}
+
+/**
+ * Given a in_vect vector of values with alphas and B G R of each layer
+ * return the corresponding pixel value when summed together
+ */
+cv::Vec4i getPixelBGRA(std::vector<double> in_vect)
+{
+	int n = in_vect.size() / 4;
+	double alpha_unit;
+	double sum_u1 = 0.0, sum_u2 = 0.0, sum_u3 = 0.0, sum_alpha = 0.0;
+	cv::Vec4i out_pix;
+	// for each layer
+	for(size_t l = 0; l < n; l++){
+		alpha_unit = in_vect.at(l);
+		sum_u1 += alpha_unit*in_vect.at(3*l+n) * 255; //B_i * alpha_i
+		sum_u2 += alpha_unit*in_vect.at(3*l+n+1) * 255; //G_i * alpha_i
+		sum_u3 += alpha_unit*in_vect.at(3*l+n+2) * 255; //R_i * alpha_i
+		sum_alpha += in_vect.at(l) * 255;
+	}
+	out_pix[0] = sum_u1;
+	out_pix[1] = sum_u2;
+	out_pix[2] = sum_u3;
+	out_pix[3] = sum_alpha;
+	return out_pix;
+}
+
+/**
+ * This is the conjugate gradient minimisation step - used to minimise the cost function F
+ */
+
+std::vector<double> minimizeFCG(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df, std::vector<cv::Vec3d> &means,
+	std::vector<cv::Matx33d> &covs, cv::Vec3d color, double p, cv::Vec4d lambda, std::vector<double> gt_alpha){
+	// Initialize variables
+	int n = means.size();
+	InputParams par[1] = {std::make_tuple(means, covs, lambda, color, p, true, std::vector<double> {0}, gt_alpha)};
+	void* params = (void *)par;
+
+	// First search direction is gradient of f. Direction is always made a unit vector
+	std::vector<double> dx0 = negate_v(df(x_0,params)); 
+	dx0 = make_unit(dx0);
+	double a0 = line_search(f, x_0, dx0, params);// arg min alpha
+
+	std::vector<double> x_n1, x_n, s_n, s_n1, dx_n, dx_n1;
+	// Add direction*step_size to x_0 to get x_1, always clip to box constraints
+	x_n = lin_transform(x_0, dx0, a0);
+	x_n = clip(x_n); 
+	s_n = dx0;
+	dx_n = dx0;
+	double b, a_n, tol;
+	int iter = 0, isMin = 0;
+
+	do{ // Iterate until no progress is made
+		iter++;		
+		dx_n1 = negate_v(df(x_n,params)); //go in direction of gradient of the minimisation function
+		dx_n1 = make_unit(dx_n1);
+		b = b_pr(dx_n1, dx_n);
+		s_n = lin_transform(dx_n1, s_n, b);
+		s_n = make_unit(s_n); // New search direction
+
+		a_n = line_search(f, x_n, s_n, params);
+		x_n1 = lin_transform(x_n, s_n, a_n);
+		x_n1 = clip(x_n1);
+
+
+		tol = normed_diff(x_n1, x_n);
