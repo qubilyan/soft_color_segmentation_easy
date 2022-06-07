@@ -147,3 +147,161 @@ cv::Vec4d dg_refine_a(std::vector<double> &v, int n, cv::Vec3d color, int k, std
 		g2 += v.at(i)*v.at(3*i+n+1);//g
 		g3 += v.at(i)*v.at(3*i+n+2);//b
 		//g4 += v.at(i);//alpha
+	}
+	g1 = 2*(g1-color.val[0])*v.at(3*k+n);
+	g2 = 2*(g2-color.val[1])*v.at(3*k+n+1);
+	g3 = 2*(g3-color.val[2])*v.at(3*k+n+2);
+	g4 = 2*( v.at(k) - gt_alphas.at(k)); 
+	return cv::Vec4d(g1,g2,g3,g4);
+}
+
+
+
+/**
+ * Partial derivative of the Mahalanobis distance in respect to u
+ */
+double d_maha(cv::Vec3d mean, cv::Matx33d cov, cv::Vec3d u, int i){ //the square has been removed from the mahalanobis distance so we don't need to deal with sqrt in derivative
+    cv::Matx33d cov_inv = cov.inv();
+	cv::Vec3d df_m;
+	double df_i;
+	df_m = cv::Vec3d(2*cov_inv*(cv::Mat(u - mean)));
+	df_i = df_m.val[i];
+    //return 2*(u.val[i]-mean.val[i])*(cov_inv.col(i).val[0]+cov_inv.col(i).val[1]+cov_inv.col(i).val[2]);//mg checked, 
+	return df_i;
+	}
+
+/**
+ * Minimization function for the unmixing step. See Line 1 in Algorithm 1 in
+ * "Interactive High-Quality Green-Screen Keying via Color Unmixing"
+ */
+double min_f(std::vector<double> &v, void* params){
+	InputParams* param = static_cast<InputParams*>(params);
+	std::vector<cv::Vec3d> means = std::get<0>((*param));
+	std::vector<cv::Matx33d> covs = std::get<1>((*param));
+	cv::Vec4d lambda = std::get<2>((*param));
+	cv::Vec3d color = std::get<3>((*param));
+	double p = std::get<4>((*param));
+	bool s =std:: get<5>((*param));
+	cv::Vec4d g_vec = g(v, means.size(), color); //constraint vector 
+	return energy(v, means, covs, s) + g_vec.dot(lambda) + 0.5*p*pow(cv::norm(g_vec, cv::NORM_L2),2);
+}
+
+/**
+ * Gradient of the minimization function for the unmixing step. Returns a vector where each element is the partial
+ * derivative of input vector v in respect to that element (#Jo: rather of energy(v) in repect to that element)
+ */
+std::vector<double> min_df(std::vector<double> &v, void* params){
+	InputParams* param = static_cast<InputParams*>(params);
+	std::vector<cv::Vec3d> means = std::get<0>((*param));
+	std::vector<cv::Matx33d> covs = std::get<1>((*param));
+	cv::Vec4d lambda = std::get<2>((*param));
+	cv::Vec3d color = std::get<3>((*param));
+	double p = std::get<4>((*param));
+	bool s = std::get<5>((*param));
+	int n = means.size();
+	std::vector<double> df(4*n);
+	double dist, sparse, alpha, dot_prod, g_norm, u1, u2, u3, grad_a, grad_u1, grad_u2, grad_u3;
+	double sum_alpha = 0.0, sum_squared = 0.0, sum_u1 = 0.0, sum_u2 = 0.0, sum_u3 = 0.0;
+	cv::Vec3d u;
+	for(size_t i = 0; i < n; i++){
+		alpha = v.at(i);
+		u1 = v.at(3*i+n);
+		u2 = v.at(3*i+n+1);
+		u3 = v.at(3*i+n+2);
+		sum_alpha += alpha;
+		sum_squared += pow(alpha,2);
+		sum_u1 += alpha*u1; //B_i * alpha_i
+		sum_u2 += alpha*u2; //G_i * alpha_i
+		sum_u3 += alpha*u3; //R_i * alpha_i
+	}
+	for(size_t i = 0; i < n; i++){
+		alpha = v.at(i);
+		u1 = v.at(3*i+n);
+		u2 = v.at(3*i+n+1);
+		u3 = v.at(3*i+n+2);
+		u = cv::Vec3d(u1,u2,u3);
+		//Alphas
+		dist = pow(cv::Mahalanobis(u, means.at(i), (covs.at(i)).inv()),2);
+		if(s){
+			if(sum_squared < 0.0000000001){
+				sparse = 0;
+			}else{
+				sparse = (constants::sigma*sum_squared-(constants::sigma*sum_alpha*2*alpha))/(pow(sum_squared,2));
+			}
+		} else {
+			sparse = 0;
+		}
+		dot_prod = lambda.dot(dg_a(v, means.size(), color, i));
+		g_norm = 0.5*p* (4*pow(sum_u1-color.val[0],3)*u1
+					+ 4*pow(sum_u2-color.val[1],3)*u2 
+					+ 4*pow(sum_u3-color.val[2],3)*u3
+					+ 4*pow(sum_alpha-1,3));
+		grad_a = dist+sparse+dot_prod+g_norm;
+		df.at(i) = grad_a;
+		//Colors
+		//u1
+		dist = alpha*d_maha(means.at(i),covs.at(i),u,0);
+		dot_prod = lambda.dot(cv::Vec4d(dg_u(v, means.size(), color, i).val[0],0,0,0));
+		g_norm = 0.5*p*4*pow(sum_u1-color.val[0],3)*alpha;
+		grad_u1 = dist+dot_prod+g_norm;
+		df.at(3*i+n) = grad_u1;
+		//u2
+		dist = alpha*d_maha(means.at(i),covs.at(i),u,1);
+		dot_prod = lambda.dot(cv::Vec4d(0,dg_u(v, means.size(), color, i).val[1],0,0));
+		g_norm = 0.5*p*4*pow(sum_u2-color.val[1],3)*alpha;
+		grad_u2 = dist+dot_prod+g_norm;
+		df.at(3*i+n+1) = grad_u2;
+		//u3
+		dist = alpha*d_maha(means.at(i),covs.at(i),u,2);
+		dot_prod = lambda.dot(cv::Vec4d(0,0,dg_u(v, means.size(), color, i).val[2],0));
+		g_norm = 0.5*p*4*pow(sum_u3-color.val[2],3)*alpha;
+		grad_u3 = dist+dot_prod+g_norm;
+		df.at(3*i+n+2) = grad_u3;
+	}
+	// Apply box constraints
+	for(size_t i = 0; i < 4*n; i++){
+		if((df.at(i) < 0 && v.at(i) >= 1) || (df.at(i) > 0 && v.at(i) <= 0)){
+			df.at(i) = 0;
+		}
+	}
+	return df;
+}
+
+
+
+/**
+ * mg - Minimization function for the color refinement step. See equation (4) and(6) of unmixing paper
+ * 
+ */
+double min_refine_f(std::vector<double> &v, void* params){
+	InputParams* param = static_cast<InputParams*>(params);
+	std::vector<cv::Vec3d> means = std::get<0>((*param));
+	std::vector<cv::Matx33d> covs = std::get<1>((*param));
+	cv::Vec4d lambda = std::get<2>((*param));
+	cv::Vec3d color = std::get<3>((*param));
+	double p = std::get<4>((*param));
+	bool s = 0;
+	std::vector<double> gt_alpha = std::get<7>((*param));
+	cv::Vec4d g_vec = g_refine(v, means.size(), color, gt_alpha); //constraint vector
+	return energy(v, means, covs, s) + g_vec.dot(lambda) + 0.5*p*pow(cv::norm(g_vec, cv::NORM_L2),2);
+}
+
+/**
+ * Gradient of the minimization function for the color refinement step. Returns a vector where each element is the partial
+ * derivative of input vector v in respect to that element.
+ */
+std::vector<double> min_refine_df(std::vector<double> &v, void* params){
+	InputParams* param = static_cast<InputParams*>(params);
+	std::vector<cv::Vec3d> means = std::get<0>((*param));
+	std::vector<cv::Matx33d> covs = std::get<1>((*param));
+	cv::Vec4d lambda = std::get<2>((*param));
+	cv::Vec3d color = std::get<3>((*param));
+	double p = std::get<4>((*param));
+	bool s = std::get<5>((*param));
+	std::vector<double> gt_alpha = std::get<7>((*param));
+	int n = means.size();
+	std::vector<double> df(4*n);
+	double dist, sparse, alpha, alphai_gt, dot_prod, g_norm, u1, u2, u3, grad_a, grad_u1, grad_u2, grad_u3;
+	double diff_gt_alpha = 0.0, sum_squared = 0.0, sum_u1 = 0.0, sum_u2 = 0.0, sum_u3 = 0.0;
+	cv::Vec3d u;
+	for(size_t i = 0; i < n; i++){
