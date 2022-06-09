@@ -78,3 +78,31 @@ Unmixing Pixel::refine(std::vector<cv::Vec3d> &means, std::vector<cv::Matx33d> &
 {
 	int n = means.size(); //number of layers
 	std::vector<double> x_min(4*n);
+
+	std::vector<double> gt_alphas(n);// save ground truth alphas to variable
+	for(int i = 0; i < n; i++){
+		gt_alphas.at(i) = x_init.at(i);
+	}
+
+		
+	x_min = minimizeMofM(x_init, (vFunctionCall)min_refine_f, (vFunctionCall2)min_refine_df, means, covs,this->color, gt_alphas);
+
+	// Format results
+	std::vector<double> alphas;
+	std::vector<cv::Vec3d> colors;
+	double u1, u2, u3;
+	for(size_t i = 0; i < n; i++){
+		alphas.push_back(x_min.at(i));
+		u1 = x_min.at(3*i+n);
+		u2 = x_min.at(3*i+n+1);
+		u3 = x_min.at(3*i+n+2);
+		colors.push_back(cv::Vec3d(u1,u2,u3));
+	}
+
+	Unmixing res;
+	res.alphas = alphas;
+	res.colors = colors;
+	res.coords = this->coord;
+
+	return res;
+}
