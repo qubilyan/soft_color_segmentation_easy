@@ -593,3 +593,72 @@ std::vector<double> minimizeFCG(std::vector<double> x_0, vFunctionCall f, vFunct
 
 
 		tol = normed_diff(x_n1, x_n);
+		x_n = x_n1;
+		dx_n = dx_n1;
+		if(tol < constants::tol){
+			isMin++;
+			s_n = negate_v(df(x_n,params));
+			s_n = make_unit(s_n);
+		}
+		if(iter % (4*n) == 0){ //Periodical reset of direction
+			s_n = negate_v(df(x_n,params));
+			s_n = make_unit(s_n);
+		}
+
+	}while((isMin < constants::isMin_max_iter) && (iter < constants::cg_max_iter));
+
+	//  std::cout << "end: " << std::endl; 
+	//  for(int i = 0; i < x_n.size(); i++){
+	//  	std::cout << "i " << i << " " << x_n.at(i) << std::endl;
+	//  }
+	//  std::cout << "f x_n: " << f(x_n,params) << std::endl;
+
+	return x_n;
+}
+
+
+/* 
+*
+*This is the method of multipliers - mg
+*
+*/
+
+std::vector<double> minimizeMofM(std::vector<double> x_0, vFunctionCall f, vFunctionCall2 df, std::vector<cv::Vec3d> &means,
+	std::vector<cv::Matx33d> &covs, cv::Vec3d color, std::vector<double>gt_alpha){
+	// Initialize variables
+	double p = .1; //initial value 0.1 
+	cv::Vec4d lambda = cv::Vec4d(.1,.1,.1,.1); //initial value (0.1,0.1,0.1,0.1) 
+	int n = means.size();
+	InputParams par[1] = {std::make_tuple(means, covs, lambda, color, p, true, std::vector<double> {0}, gt_alpha)};
+	void* params = (void *)par;
+	std::vector<double> x_n, x_n1;
+	double diff;
+	x_n = x_0;
+	int count = 0;
+	int iter = 0;
+	do{
+		//std::cout << "lambda: " << lambda.val[0] << std::endl;
+		//std::cout << "p: " << p << std::endl;
+		if(count== 0){
+			x_n1 = minimizeFCG( x_n, f, df,  means,covs, color, p, lambda, gt_alpha);
+			count++;
+		}else{
+
+			lambda += p*g(x_n1,n,color); 
+			if(cv::norm(g(x_n1,n,color), cv::NORM_L2) > constants::gamma*cv::norm(g(x_n,n,color), cv::NORM_L2)){
+				p = constants::beta * p;
+			}
+			par[0] = std::make_tuple(means, covs, lambda, color, p, true, std::vector<double> {0}, gt_alpha);
+			params = (void *)par;
+			x_n1 = minimizeFCG( x_n, f, df,  means,covs, color, p, lambda, gt_alpha);
+		}
+		iter ++;
+		diff = cv::norm(x_n,x_n1,cv::NORM_L2);
+		x_n = x_n1;
+		
+	}while((diff < 0.0001 && iter < 11) ||(diff > 0.0001));	//mg found 11 was a good number for the minimum number of iterations needed to make sure constraints were imposed
+	std::cout << "MoM iter: " << iter << std::endl;
+	return x_n;
+}
+
+
