@@ -254,3 +254,29 @@ std::vector<cv::Mat> MatteRegularisation(int radius, cv::Mat guide_img, std::vec
         cv::Mat fillayer = filtered_layers.at(i); // these layers are the new filtered 1D alpha layers
         cv::Mat reg_alpha(guide_img.rows, guide_img.cols, CV_32FC1, cvScalar(0.0));
         //regularise the alpha values so they all add to 1 (or 255, depending on scaling)
+        for(size_t i = 0; i < guide_img.rows; i++){
+            for(size_t j = 0; j < guide_img.cols; j++){
+                reg_alpha.at<float>(i,j) = (1.0/sum_filtered_alphas.at<float>(i,j))*(fillayer.at<float>(i,j));
+            }
+        }
+        
+        //transfer these regularized alpha layers to our full colour+alpha layers
+        cv::Mat bgra[4];
+        cv::Mat bgra2[4];
+        cv::Mat reg_layer(guide_img.rows, guide_img.cols, CV_32FC4);
+        cv::split(reg_layer,bgra);
+        cv::split(orig_layer,bgra2); //split original layers so we can access colour layers
+        
+        //create new layers with colour and filtered regularised alphas
+        bgra2[0].convertTo(bgra[0],bgra[0].type()); //add b to bgra
+        bgra2[1].convertTo(bgra[1],bgra[0].type());//add g to bgra
+        bgra2[2].convertTo(bgra[2],bgra[0].type());//add r to bgra
+        reg_alpha.convertTo(bgra[3],bgra[0].type()); //add a to bgra
+        cv::merge(bgra,4,reg_layer);
+
+        reg_layer.convertTo(reg_layer, CV_8UC4);
+        regularised_layers.push_back(reg_layer);
+    }
+
+    return regularised_layers;
+}
