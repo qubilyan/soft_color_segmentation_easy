@@ -128,3 +128,115 @@ int main( int argc, char** argv )
 
 
     auto t_start_CM = std::chrono::high_resolution_clock::now();
+
+    means.clear();
+    covs.clear();
+
+    std::cout << "Calculating Global Color Model with tau = " << tau<<"."<< std::endl;
+            
+    //convert video_frames from CV_U8C3 to CV_64FC3 
+    cv::Mat img;
+	image.convertTo(img,CV_64F,1.0/255.0);
+
+	//compute colour model
+    getGlobalColorModel(img, means, covs, tau);
+
+	//output to terminal and save image
+    std::cout << "Found " << means.size() << " colors." << std::endl;
+    saveColorModelAsImage((std::string("../") + dir_name + "/CM" + ".png").c_str(), means, covs);
+
+	std::cout << "" << std::endl;
+	std::cout << "Colour Model Estimation Step: Done. " << std::endl;
+    std::cout << "" << std::endl;
+	//output mean and covariances for debugging
+    //std::cout << "Means:"<<std::endl;
+    //for (size_t i=0; i< means.size(); i++){
+    //   std::cout << "mean :" << means[i] <<std::endl;
+    //    std::cout << "cov : " << covs[i] <<std::endl;
+    //}
+
+	///////////////////////////////////////////////// end of step one
+
+
+
+	/*************************************************************
+	*               Step 1. Sparse Colour Unmixing Step              *
+    *************************************************************/
+
+    std::cout << "Step 1/3: Colour Unmixing..." << std::endl;
+	std::cout << "" << std::endl;
+   	//initialise variables
+	int n = means.size(); //nb of layers
+	int rows = image.rows;
+	int cols = image.cols;
+    cv::Vec3d color;
+	std::vector<cv::Mat> layers;
+	for(size_t i = 0; i < n; i++){
+		cv::Mat layer(image.rows, image.cols, CV_8UC4);
+		layers.push_back(layer);
+	}
+
+
+
+    // Create Thread pool
+	int num_thread = 8;
+    //std::cout << "Using Thread Pool with " << num_thread << " threads." << std::endl;
+    ThreadPool pool(num_thread); 
+    std::vector<std::future<Unmixing>> results; //where we will store unmixing results
+
+
+    //for each frame unmixing duration
+	//auto t_start_unmix = std::chrono::high_resolution_clock::now(); //which is also t_end_flow
+
+    // Parse image and add one task per pixel to thread pool
+    for(size_t i = 0; i < image.rows; i++){
+        for(size_t j = 0; j < image.cols; j++){
+
+            color = image.at<cv::Vec3b>(i,j);
+            color = color/255;
+            Pixel p = Pixel(color, cv::Point(j,i));
+                
+            std::vector<double> x_init(0); //create vector of zeros of size 0
+            results.emplace_back(pool.enqueue( 
+            [](Pixel p, std::vector<cv::Vec3d> means, std::vector<cv::Matx33d> covs,std::vector<double> x_init)
+            {return p.unmix(means, covs, x_init);}, p, means, covs, x_init));
+        }
+    }
+
+	// Get results from thread pool and create layers
+	std::cout << "Percentage complete:"  << std::endl;
+    int num = 0;
+    int transp_pix_sup = 0, transp_pix_inf = 0;
+    float progress = 0.0;
+    int barWidth = 70;
+    for(auto && result : results)
+    {
+        num++;
+        //show progress percentage
+        progress = float(num)/float(cols*rows);
+        std::cout<< int(progress * 100.0) << " %\r";
+        std::cout.flush();
+
+        // Create layers from results
+        int sum_alpha = 0; //verify alpha constraint
+        Unmixing u = result.get(); 
+            
+        for(size_t i = 0; i < n; i++){
+            cv::Mat layer = layers.at(i);
+            cv::Vec4b& v = layer.at<cv::Vec4b>(u.coords);
+
+            v[0] = u.colors.at(i).val[0]*255;
+            v[1] = u.colors.at(i).val[1]*255;
+            v[2] = u.colors.at(i).val[2]*255;
+            v[3] = u.alphas.at(i)*255; 
+            sum_alpha += floor(u.alphas.at(i)*255);
+        }
+    }
+    std::cout<< "100 %" <<std::endl;
+	std::cout << "" << std::endl;
+	std::cout<< "Step 1/3: Done." <<std::endl;
+	std::cout << "" << std::endl;
+
+
+    //duration of layer filtering
+    auto t_start_filters = std::chrono::high_resolution_clock::now();
