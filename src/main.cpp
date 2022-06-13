@@ -240,3 +240,115 @@ int main( int argc, char** argv )
 
     //duration of layer filtering
     auto t_start_filters = std::chrono::high_resolution_clock::now();
+
+
+    // save images
+    saveLayers((std::string("../") + dir_name).c_str(),  layers, "step1_");
+
+
+
+	/*************************************************************
+    *               Step 2. Matte Regularization Step                *
+    *************************************************************/
+    std::cout << "Step 2/3: Matte Regularisation..."   << std::endl;
+	//Matte regularisation with guided filter
+	std::vector<cv::Mat> output_layers;
+	int r = ((60.0/(sqrt(1000000.0/(cols*rows))))+1.0); //radius for filter based on one used in unmixing paper
+    std::cout << "Filter radius has size: " << r <<std::endl; 
+
+    output_layers = MatteRegularisation(r, image, layers); //filter and regularise the alpha values
+
+    saveLayers((std::string("../") + dir_name).c_str(),  output_layers, "step2_");
+	
+	std::cout << "" << std::endl;
+	std::cout << "Step 2/3: Done."  << std::endl;
+	std::cout << "" << std::endl;
+
+
+
+	/*************************************************************
+    *               3. Colour Refinement Step         	         *
+    *************************************************************/
+    std::cout << "Step 3/3: Colour Refinement..."  << std::endl;
+	std::cout << "" << std::endl;
+
+
+    //std::cout << "Using Thread Pool with " << num_thread << " threads." << std::endl;
+    ThreadPool pool_r(num_thread);
+    std::vector<std::future<Unmixing>> refine_results;
+
+    // Parse image and add one task per pixel to thread pool
+    for(size_t i = 0; i < rows; i++){
+       for(size_t j = 0; j < cols; j++){
+
+            color = image.at<cv::Vec3b>(i,j);
+            color = color/255;
+            Pixel p = Pixel(color, cv::Point(j,i));
+                
+            std::vector<double> x_init_r(4*n);
+            for(size_t lay = 0; lay < n; lay++){ //for each layer of this frame, initialise colours 
+                x_init_r.at(lay) = output_layers[lay].at<cv::Vec4b>(i,j)[3] / 255.0f;
+                x_init_r.at(3*lay+n) =  output_layers[lay].at<cv::Vec4b>(i,j)[0] / 255.0f;
+                x_init_r.at(3*lay+n+1) = output_layers[lay].at<cv::Vec4b>(i,j)[1] / 255.0f;
+                x_init_r.at(3*lay+n+2) = output_layers[lay].at<cv::Vec4b>(i,j)[2] / 255.0f;
+            }
+            refine_results.emplace_back(pool_r.enqueue( 
+            [](Pixel p, std::vector<cv::Vec3d> means, std::vector<cv::Matx33d> covs,std::vector<double> x_init_r)
+            {return p.refine(means, covs, x_init_r);}, p, means, covs, x_init_r));
+        }
+    }
+        
+    // Get results from thread pool and create layers
+    num = 0;
+    transp_pix_sup = 0;
+	transp_pix_inf = 0;
+    progress = 0.0;
+    barWidth = 70;
+	std::cout << "Percentage complete:"  << std::endl;
+    for(auto && result : refine_results)
+    {
+        num++;
+        //show progress percentage
+        progress = float(num)/float(cols*rows);
+        std::cout<< int(progress * 100.0) << " %\r";
+        std::cout.flush();
+
+        // Create layers from results
+        int sum_alpha = 0; //verify alpha constraint
+        Unmixing u = result.get();
+            
+        for(size_t i = 0; i < n; i++){
+    		cv::Mat layer = layers.at(i);
+        	cv::Vec4b& v = layer.at<cv::Vec4b>(u.coords);
+            v[0] = u.colors.at(i).val[0]*255;
+            v[1] = u.colors.at(i).val[1]*255;
+            v[2] = u.colors.at(i).val[2]*255;
+            v[3] = u.alphas.at(i)*255; 
+            sum_alpha += floor(u.alphas.at(i)*255);
+        }
+        //std::cout <<   "sum_alpha" << sum_alpha << std::endl;
+    }
+    std::cout<< "100 %" <<std::endl;
+	std::cout << "" << std::endl;
+	std::cout<< "Step 3/3: Done. " <<std::endl;
+	std::cout << "" << std::endl;
+	/*************************************************************
+    *                  Save Final Layers          	         *
+    *************************************************************/
+    //compute sum of layers
+	cv::Mat sum_layers(image.rows, image.cols, CV_8UC4, 0.0);
+    sumLayers(sum_layers, layers);
+
+    //save all layers as images
+    saveLayers((std::string("../") + dir_name).c_str(),  layers, "FinalLayers_" ); 
+
+	//save the sum of the layers as an image
+    cv::imwrite((std::string("../") + dir_name).c_str() + std::string("/sum_frames/sum_frame.png"), sum_layers);
+
+	std::cout<< "Final layers saved as images. " <<std::endl;
+
+	/************************************************************/
+
+
+	return 0;
+}
